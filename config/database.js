@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
       useUnifiedTopology: true,
       maxPoolSize: 10, // Maintain up to 10 socket connections
       minPoolSize: 5,  // Maintain at least 5 socket connections
