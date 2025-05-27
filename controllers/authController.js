@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendPasswordResetEmail } = require('../utils/emailService');
 const { generateToken } = require('../utils/jwtUtils');
+//const redisClient = require('../utils/redisClient');
 
 // Register a new user
 exports.register = async (req, res) => {
@@ -277,3 +278,47 @@ exports.refreshToken = async (req, res) => {
     });
   }
 };
+
+// Logout user
+// exports.logout = async (req, res) => {
+//   try {
+//     const token = req.headers.authorization?.split(' ')[1];
+
+//     if (!token) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Token missing in request',
+//       });
+//     }
+
+//     // Get token expiration from JWT
+//     const decoded = require('jsonwebtoken').decode(token);
+//     const exp = decoded?.exp;
+
+//     if (!exp) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid token format',
+//       });
+//     }
+
+//     const ttl = exp - Math.floor(Date.now() / 1000); 
+
+//     // Store token in Redis with TTL so it auto-expires
+//     await redisClient.set(token, 'blacklisted', {
+//       EX: ttl,
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Logout successful. Token is now blacklisted.',
+//     });
+//   } catch (err) {
+//     console.error('Logout error:', err.message);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Server error during logout',
+//     });
+//   }
+// };
+
