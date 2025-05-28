@@ -71,9 +71,9 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login user
 exports.login = async (req, res) => {
   const { email, password } = req.body;
+  const bcrypt = require('bcryptjs');
 
   try {
     // Input validation
@@ -84,8 +84,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if user exists
-    let user = await User.findOne({ email, password });
+    // Check if user exists by email only
+    let user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -93,14 +93,14 @@ exports.login = async (req, res) => {
       });
     }
 
-    // // Compare password
-    // const isMatch = await bcrypt.compare(password, user.password);
-    // if (!isMatch) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'Invalid credentials'
-    //   });
-    // }
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
 
     // Generate JWT token
     const token = generateToken(user);
@@ -116,7 +116,7 @@ exports.login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Login error:", err.message);
+    console.error("Login error:", err.message, { stack: err.stack });
     res.status(500).json({
       success: false,
       message: "Server error during login",
@@ -168,7 +168,7 @@ exports.forgotPassword = async (req, res) => {
 
     // Set token and expiration
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
 
     // Save without triggering validation
     await user.save({ validateBeforeSave: false });
@@ -246,13 +246,18 @@ exports.resetPassword = async (req, res) => {
     // Generate a new token for automatic login
     const token = generateToken(user);
 
+    console.log("Password reset successful for user:", user.email);
     res.json({
       success: true,
       message: "Password has been reset successfully",
       token,
     });
   } catch (err) {
-    console.error("Reset password error:", err.message);
+    console.error("Reset password error:", {
+      error: err.message,
+      stack: err.stack,
+      resetPasswordToken,
+    });
     res.status(500).json({
       success: false,
       message: "Server error resetting password",
