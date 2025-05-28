@@ -3,10 +3,11 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
   {
-    name: {
+    username: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+      unique: true 
     },
     email: {
       type: String,
@@ -17,7 +18,8 @@ const UserSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true
+      required: true,
+      minlength: 6 
     },
     isEmailVerified: {
       type: Boolean,
@@ -27,10 +29,18 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: ['user', 'admin'],
       default: 'user'
+    },
+    resetPasswordToken: {
+      type: String,
+      default: undefined 
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: undefined
     }
   },
   {
-    timestamps: true // <-- this adds and manages createdAt and updatedAt
+    timestamps: true 
   }
 );
 
