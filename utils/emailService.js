@@ -28,7 +28,7 @@ const sendPasswordResetEmail = async (email, resetToken) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <!-- Header with Logo -->
         <div style="text-align: center; padding-bottom: 20px;">
-          <img src="https://via.placeholder.com/150x50.png?text=Ibloom+Logo" alt="Ibloom Logo" style="max-width: 150px; height: auto;" />
+          <img src="https://sidmach.com/wp-content/uploads/2024/02/password.png alt="Ibloom Logo" style="max-width: 150px; height: auto;" />
         </div>
 
         <!-- Main Content -->
