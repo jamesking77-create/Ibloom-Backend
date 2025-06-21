@@ -1,4 +1,3 @@
-// models/User.js - User model definition
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
@@ -7,7 +6,7 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true 
+      unique: true
     },
     email: {
       type: String,
@@ -19,7 +18,7 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minlength: 6 
+      minlength: 6
     },
     isEmailVerified: {
       type: Boolean,
@@ -32,15 +31,31 @@ const UserSchema = new mongoose.Schema(
     },
     resetPasswordToken: {
       type: String,
-      default: undefined 
+      default: undefined
     },
     resetPasswordExpires: {
       type: Date,
       default: undefined
-    }
+    },
+
+    name: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    location: { type: String, trim: true },
+    joinDate: { type: Date, default: Date.now },
+    avatar: { type: String, default: '/api/placeholder/150/150' },
+    bio: { type: String, trim: true },
+    specialize: [{ type: String, trim: true }], 
+
+    categories: [
+      {
+        id: { type: Number, required: true },
+        name: { type: String, required: true, trim: true }
+      }
+    ]
+
   },
   {
-    timestamps: true 
+    timestamps: true
   }
 );
 
