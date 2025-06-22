@@ -42,7 +42,15 @@ const UserSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     location: { type: String, trim: true },
     joinDate: { type: Date, default: Date.now },
-    avatar: { type: String, default: '/api/placeholder/150/150' },
+    avatar: {
+    url: { type: String },
+    publicId: { type: String },
+    resourceType: { type: String },
+    format: { type: String },
+    width: { type: Number },
+    height: { type: Number },
+    bytes: { type: Number }
+  },
     bio: { type: String, trim: true },
     specialize: [{ type: String, trim: true }], 
 
