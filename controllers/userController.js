@@ -1,10 +1,11 @@
 // controllers/userController.js
 const User = require('../models/User');
+const { avatarUpload, deleteFromCloudinary, extractPublicId } = require('../utils/cloudinary');
+
 
 // Get current user profile
 const getProfile = async (req, res) => {
   try {
-    // User is already available from auth middleware (password excluded)
     const user = req.user;
     
     res.status(200).json({
@@ -50,7 +51,7 @@ const updateProfile = async (req, res) => {
       phone,
       location,
       bio,
-      avatar,
+      // avatar,
       specialize,
       categories
     } = req.body;
@@ -60,9 +61,32 @@ const updateProfile = async (req, res) => {
     if (phone !== undefined) updateData.phone = phone;
     if (location !== undefined) updateData.location = location;
     if (bio !== undefined) updateData.bio = bio;
-    if (avatar !== undefined) updateData.avatar = avatar;
+    // if (avatar !== undefined) updateData.avatar = avatar;
     if (specialize !== undefined) updateData.specialize = specialize;
     if (categories !== undefined) updateData.categories = categories;
+
+    if (req.file) {
+      // If user already has an avatar, delete the old one from Cloudinary
+      if (currentUser.avatar && currentUser.avatar.publicId) {
+        try {
+          await deleteFromCloudinary(currentUser.avatar.publicId);
+        } catch (deleteError) {
+          console.error('Error deleting old avatar:', deleteError);
+        }
+      }
+
+      // Add new avatar data to update object
+      updateData.avatar = {
+        url: req.file.path,
+        publicId: req.file.filename,
+        resourceType: req.file.resource_type,
+        format: req.file.format,
+        width: req.file.width,
+        height: req.file.height,
+        bytes: req.file.bytes
+      };
+    }
+
 
     // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
