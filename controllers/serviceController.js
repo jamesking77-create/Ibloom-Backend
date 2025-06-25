@@ -68,7 +68,9 @@ const updateCategory = async (req, res) => {
     // Parse request body data
     let {
       name,
+      image,
       description,
+      itemCount,
       items
     } = req.body;
 
@@ -84,9 +86,10 @@ const updateCategory = async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
+    if (image !== undefined) updateData.image = image;
     if (items !== undefined) {
       updateData.items = items;
-      updateData.itemCount = Array.isArray(items) ? items.length : 0;
+      updateData.itemCount = Array.isArray(items) ? items.length : itemCount;
     }
 
     // Handle image upload if file is present
@@ -170,7 +173,9 @@ const createCategory = async (req, res) => {
     let {
       id,
       name,
+      image,
       description,
+      itemCount,
       items
     } = req.body;
 
@@ -186,9 +191,10 @@ const createCategory = async (req, res) => {
     const categoryData = {
       id: parseInt(id),
       name,
+      image,
       description: description || '',
       items: items || [],
-      itemCount: Array.isArray(items) ? items.length : 0
+      itemCount: Array.isArray(items) ? items.length : itemCount
     };
 
     // Handle image upload if file is present
