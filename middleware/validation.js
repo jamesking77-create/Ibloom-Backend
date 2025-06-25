@@ -2,7 +2,7 @@
 
 const validateCategory = (req, res, next) => {
   try {
-    const { id, name, description, items } = req.body;
+    const { id, name, description } = req.body;
     const errors = [];
 
     // Validate required fields
@@ -26,18 +26,18 @@ const validateCategory = (req, res, next) => {
     }
 
     // Validate items array
-    if (items) {
-      let parsedItems;
-      try {
-        parsedItems = typeof items === 'string' ? JSON.parse(items) : items;
-      } catch (parseError) {
-        errors.push('Items must be a valid JSON array');
-      }
+    // if (items) {
+    //   let parsedItems;
+    //   try {
+    //     parsedItems = typeof items === 'string' ? JSON.parse(items) : items;
+    //   } catch (parseError) {
+    //     errors.push('Items must be a valid JSON array');
+    //   }
 
-      if (parsedItems && !Array.isArray(parsedItems)) {
-        errors.push('Items must be an array');
-      }
-    }
+    //   if (parsedItems && !Array.isArray(parsedItems)) {
+    //     errors.push('Items must be an array');
+    //   }
+    // }
 
     // Check for file upload errors (if using multer)
     if (req.fileValidationError) {
