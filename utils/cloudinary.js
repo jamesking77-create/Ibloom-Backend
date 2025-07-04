@@ -1,4 +1,4 @@
-// utils/cloudinary.js (updated version with better error handling)
+// utils/cloudinary.js (optimized version - URL only)
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -32,9 +32,6 @@ cloudinary.config({
 });
 
 console.log('✅ Cloudinary configured successfully');
-console.log('Cloud Name:', process.env.CLOUDINARY_CLOUD_NAME);
-console.log('API Key:', process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not Set');
-console.log('API Secret:', process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Not Set');
 
 // Configure multer storage for general images
 const storage = new CloudinaryStorage({
@@ -115,10 +112,15 @@ const avatarUpload = multer({
   }
 });
 
-// Helper function to delete from Cloudinary
-const deleteFromCloudinary = async (publicId) => {
+// Helper function to delete from Cloudinary using URL
+const deleteFromCloudinary = async (imageUrl) => {
   try {
-    console.log('🗑️ Attempting to delete from Cloudinary:', publicId);
+    if (!imageUrl) return null;
+    
+    console.log('🗑️ Attempting to delete from Cloudinary:', imageUrl);
+    const publicId = extractPublicId(imageUrl);
+    console.log('📝 Extracted public ID:', publicId);
+    
     const result = await cloudinary.uploader.destroy(publicId);
     console.log('✅ Delete result:', result);
     return result;
@@ -130,9 +132,33 @@ const deleteFromCloudinary = async (publicId) => {
 
 // Helper function to extract public ID from Cloudinary URL
 const extractPublicId = (url) => {
-  const parts = url.split('/');
-  const filename = parts[parts.length - 1];
-  return filename.split('.')[0];
+  try {
+    // Handle both secure and non-secure URLs
+    // Example: https://res.cloudinary.com/cloudname/image/upload/v1234567890/folder/filename.jpg
+    const urlParts = url.split('/');
+    const uploadIndex = urlParts.findIndex(part => part === 'upload');
+    
+    if (uploadIndex === -1) {
+      throw new Error('Invalid Cloudinary URL format');
+    }
+    
+    // Get everything after 'upload/v{version}/' or 'upload/'
+    const pathAfterUpload = urlParts.slice(uploadIndex + 1);
+    
+    // Remove version if present (starts with 'v' followed by numbers)
+    const startIndex = pathAfterUpload[0] && pathAfterUpload[0].match(/^v\d+$/) ? 1 : 0;
+    
+    // Join the remaining parts and remove file extension
+    const publicIdWithExtension = pathAfterUpload.slice(startIndex).join('/');
+    const publicId = publicIdWithExtension.replace(/\.[^/.]+$/, '');
+    
+    return publicId;
+  } catch (error) {
+    console.error('❌ Error extracting public ID from URL:', url, error);
+    const parts = url.split('/');
+    const filename = parts[parts.length - 1];
+    return filename.split('.')[0];
+  }
 };
 
 module.exports = {

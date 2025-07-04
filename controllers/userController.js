@@ -1,4 +1,3 @@
-// controllers/userController.js (updated with better error handling and logging)
 const User = require('../models/User');
 const { deleteFromCloudinary } = require('../utils/cloudinary');
 
@@ -10,8 +9,6 @@ const updateProfile = async (req, res) => {
     console.log('Request file:', req.file ? {
       filename: req.file.filename,
       originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
       path: req.file.path
     } : 'No file uploaded');
 
@@ -31,6 +28,7 @@ const updateProfile = async (req, res) => {
 
     // Parse request body data
     let {
+      email,
       name,
       phone,
       location,
@@ -51,7 +49,40 @@ const updateProfile = async (req, res) => {
       console.log('⚠️ JSON parse error:', parseError.message);
     }
 
+    // Email validation and duplicate check
+    if (email !== undefined && email !== currentUser.email) {
+      console.log('📧 Email change detected:');
+      console.log('  From:', currentUser.email);
+      console.log('  To:', email);
+      
+      // Check if email already exists
+      const existingUser = await User.findOne({ 
+        email: email.toLowerCase(),
+        _id: { $ne: userId }
+      });
+      
+      if (existingUser) {
+        console.log('❌ Email already exists:', email);
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
+      
+      // Email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.log('❌ Invalid email format:', email);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+    }
+
+    // Prepare update data
     const updateData = {};
+    if (email !== undefined) updateData.email = email.toLowerCase();
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
     if (location !== undefined) updateData.location = location;
@@ -66,28 +97,21 @@ const updateProfile = async (req, res) => {
       console.log('🖼️ Processing avatar upload...');
       
       // If user already has an avatar, delete the old one from Cloudinary
-      if (currentUser.avatar && currentUser.avatar.publicId) {
-        console.log('🗑️ Deleting old avatar:', currentUser.avatar.publicId);
+      if (currentUser.avatar) {
+        console.log('🗑️ Deleting old avatar:', currentUser.avatar);
         try {
-          const deleteResult = await deleteFromCloudinary(currentUser.avatar.publicId);
+          const deleteResult = await deleteFromCloudinary(currentUser.avatar);
           console.log('✅ Old avatar deleted:', deleteResult);
         } catch (deleteError) {
           console.error('❌ Error deleting old avatar:', deleteError);
+          // Continue even if deletion fails
         }
       }
 
-      // Add new avatar data to update object
-      updateData.avatar = {
-        url: req.file.path,
-        publicId: req.file.filename,
-        resourceType: req.file.resource_type,
-        format: req.file.format,
-        width: req.file.width,
-        height: req.file.height,
-        bytes: req.file.bytes
-      };
-
-      console.log('✅ New avatar data:', updateData.avatar);
+      // Save only the Cloudinary URL - much faster!
+      updateData.avatar = req.file.path;
+      
+      console.log('✅ New avatar URL saved:', updateData.avatar);
     } else {
       console.log('ℹ️ No avatar file to process');
     }
@@ -109,6 +133,7 @@ const updateProfile = async (req, res) => {
     }
 
     console.log('✅ User updated successfully');
+    console.log('📧 Email after update:', updatedUser.email);
 
     const responseData = {
       success: true,
@@ -122,7 +147,7 @@ const updateProfile = async (req, res) => {
           phone: updatedUser.phone,
           location: updatedUser.location,
           bio: updatedUser.bio,
-          avatar: updatedUser.avatar,
+          avatar: updatedUser.avatar, // Now just a string URL
           specialize: updatedUser.specialize,
           categories: updatedUser.categories,
           role: updatedUser.role,
@@ -138,7 +163,8 @@ const updateProfile = async (req, res) => {
       success: responseData.success,
       message: responseData.message,
       userEmail: responseData.data.user.email,
-      hasAvatar: !!responseData.data.user.avatar
+      avatarUrl: responseData.data.user.avatar,
+      emailUpdated: updateData.email ? true : false
     });
 
     res.status(200).json(responseData);
@@ -155,6 +181,15 @@ const updateProfile = async (req, res) => {
         success: false,
         message: 'Validation error',
         errors: validationErrors
+      });
+    }
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      console.log('❌ Duplicate key error:', error.keyValue);
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists'
       });
     }
 
@@ -195,7 +230,7 @@ const getProfile = async (req, res) => {
           phone: user.phone,
           location: user.location,
           bio: user.bio,
-          avatar: user.avatar,
+          avatar: user.avatar, // Now just a string URL
           specialize: user.specialize,
           categories: user.categories,
           role: user.role,
