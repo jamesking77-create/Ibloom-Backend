@@ -1,4 +1,4 @@
-const Booking = require('../models/Booking');
+const Booking = require("../models/Bookings");
 
 // Get all bookings
 const getBookings = async (req, res) => {
@@ -9,18 +9,21 @@ const getBookings = async (req, res) => {
       currentPage: 1,
       totalPages: 1,
       totalItems: bookings.length,
-      itemsPerPage: 10
+      itemsPerPage: 10,
     };
 
     const stats = {
       thisWeek: bookings.length,
       thisMonth: bookings.length,
-      totalRevenue: bookings.reduce((acc, b) => acc + parseInt(b.amount.replace(/[₦,]/g, '')), 0)
+      totalRevenue: bookings.reduce(
+        (acc, b) => acc + parseInt(b.amount.replace(/[₦,]/g, "")),
+        0
+      ),
     };
 
     res.status(200).json({ bookings, pagination, stats });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch bookings' });
+    res.status(500).json({ message: "Failed to fetch bookings" });
   }
 };
 
@@ -31,7 +34,7 @@ const createBooking = async (req, res) => {
     await booking.save();
     res.status(201).json(booking);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to create booking' });
+    res.status(500).json({ message: "Failed to create booking" });
   }
 };
 
@@ -39,10 +42,10 @@ const createBooking = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
     res.status(200).json(booking);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch booking' });
+    res.status(500).json({ message: "Failed to fetch booking" });
   }
 };
 
@@ -50,14 +53,15 @@ const getBookingById = async (req, res) => {
 const updateBookingStatus = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.status = req.body.status;
     await booking.save();
 
     res.status(200).json({ status: booking.status });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update status' });
+    console.error("Update booking status error:", error);
+    res.status(500).json({ message: "Failed to update status" });
   }
 };
 
@@ -65,15 +69,20 @@ const updateBookingStatus = async (req, res) => {
 const updateBookingPayment = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.paymentStatus = req.body.paymentStatus;
     booking.amountPaid = req.body.amountPaid;
     await booking.save();
 
-    res.status(200).json({ paymentStatus: booking.paymentStatus, amountPaid: booking.amountPaid });
+    res
+      .status(200)
+      .json({
+        paymentStatus: booking.paymentStatus,
+        amountPaid: booking.amountPaid,
+      });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update payment' });
+    res.status(500).json({ message: "Failed to update payment" });
   }
 };
 
@@ -81,7 +90,7 @@ const updateBookingPayment = async (req, res) => {
 const updateBookingItems = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.items = req.body.items;
     booking.amount = req.body.amount;
@@ -89,7 +98,7 @@ const updateBookingItems = async (req, res) => {
 
     res.status(200).json({ items: booking.items, amount: booking.amount });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update items' });
+    res.status(500).json({ message: "Failed to update items" });
   }
 };
 
@@ -99,5 +108,5 @@ module.exports = {
   getBookingById,
   updateBookingStatus,
   updateBookingPayment,
-  updateBookingItems
+  updateBookingItems,
 };
