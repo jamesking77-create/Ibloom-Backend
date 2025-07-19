@@ -3,30 +3,15 @@ const { deleteFromCloudinary } = require('../utils/cloudinary');
 
 const updateProfile = async (req, res) => {
   try {
-    console.log('=== UPDATE PROFILE REQUEST ===');
-    console.log('User ID:', req.user._id);
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file ? {
-      filename: req.file.filename,
-      originalname: req.file.originalname,
-      path: req.file.path
-    } : 'No file uploaded');
-
     const userId = req.user._id;
-    
-    // Get current user data to handle old avatar deletion
     const currentUser = await User.findById(userId);
     if (!currentUser) {
-      console.log('❌ User not found:', userId);
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
-    console.log('✅ Current user found:', currentUser.email);
-
-    // Parse request body data
     let {
       email,
       name,
@@ -37,7 +22,6 @@ const updateProfile = async (req, res) => {
       categories
     } = req.body;
 
-    // Parse JSON strings if they exist
     try {
       if (typeof specialize === 'string') {
         specialize = JSON.parse(specialize);
@@ -46,7 +30,7 @@ const updateProfile = async (req, res) => {
         categories = JSON.parse(categories);
       }
     } catch (parseError) {
-      console.log('⚠️ JSON parse error:', parseError.message);
+      console.log('JSON parse error:', parseError.message);
     }
 
     // Email validation and duplicate check
@@ -62,7 +46,7 @@ const updateProfile = async (req, res) => {
       });
       
       if (existingUser) {
-        console.log('❌ Email already exists:', email);
+        console.log('Email already exists:', email);
         return res.status(400).json({
           success: false,
           message: 'Email already exists'
@@ -72,7 +56,7 @@ const updateProfile = async (req, res) => {
       // Email format validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        console.log('❌ Invalid email format:', email);
+        console.log('Invalid email format:', email);
         return res.status(400).json({
           success: false,
           message: 'Invalid email format'
@@ -90,34 +74,27 @@ const updateProfile = async (req, res) => {
     if (specialize !== undefined) updateData.specialize = specialize;
     if (categories !== undefined) updateData.categories = categories;
 
-    console.log('📝 Update data prepared:', updateData);
-
-    // Handle avatar upload if file is present
     if (req.file) {
-      console.log('🖼️ Processing avatar upload...');
+      console.log('processing avatar upload...');
       
       // If user already has an avatar, delete the old one from Cloudinary
       if (currentUser.avatar) {
         console.log('🗑️ Deleting old avatar:', currentUser.avatar);
         try {
           const deleteResult = await deleteFromCloudinary(currentUser.avatar);
-          console.log('✅ Old avatar deleted:', deleteResult);
         } catch (deleteError) {
-          console.error('❌ Error deleting old avatar:', deleteError);
-          // Continue even if deletion fails
+          console.error('Error deleting old avatar:', deleteError);
         }
       }
 
-      // Save only the Cloudinary URL - much faster!
       updateData.avatar = req.file.path;
       
-      console.log('✅ New avatar URL saved:', updateData.avatar);
+      console.log('New avatar URL saved:', updateData.avatar);
     } else {
-      console.log('ℹ️ No avatar file to process');
+      console.log('ℹNo avatar file to process');
     }
 
     // Update user profile
-    console.log('💾 Updating user in database...');
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updateData,
@@ -125,15 +102,12 @@ const updateProfile = async (req, res) => {
     ).select('-password -resetPasswordToken -resetPasswordExpires');
 
     if (!updatedUser) {
-      console.log('❌ User not found during update');
+      console.log('User not found during update');
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
-
-    console.log('✅ User updated successfully');
-    console.log('📧 Email after update:', updatedUser.email);
 
     const responseData = {
       success: true,
@@ -147,7 +121,7 @@ const updateProfile = async (req, res) => {
           phone: updatedUser.phone,
           location: updatedUser.location,
           bio: updatedUser.bio,
-          avatar: updatedUser.avatar, // Now just a string URL
+          avatar: updatedUser.avatar,
           specialize: updatedUser.specialize,
           categories: updatedUser.categories,
           role: updatedUser.role,
@@ -159,24 +133,13 @@ const updateProfile = async (req, res) => {
       }
     };
 
-    console.log('📤 Sending response:', {
-      success: responseData.success,
-      message: responseData.message,
-      userEmail: responseData.data.user.email,
-      avatarUrl: responseData.data.user.avatar,
-      emailUpdated: updateData.email ? true : false
-    });
-
     res.status(200).json(responseData);
 
   } catch (error) {
-    console.error('❌ Update profile error:', error);
-    console.error('Error stack:', error.stack);
-        
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
-      console.log('❌ Validation errors:', validationErrors);
+      console.log('Validation errors:', validationErrors);
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -186,7 +149,7 @@ const updateProfile = async (req, res) => {
 
     // Handle duplicate key error
     if (error.code === 11000) {
-      console.log('❌ Duplicate key error:', error.keyValue);
+      console.log('Duplicate key error:', error.keyValue);
       return res.status(400).json({
         success: false,
         message: 'Email already exists'
@@ -195,7 +158,7 @@ const updateProfile = async (req, res) => {
 
     // Handle multer errors
     if (error.code === 'LIMIT_FILE_SIZE') {
-      console.log('❌ File too large');
+      console.log('File too large');
       return res.status(400).json({
         success: false,
         message: 'File size too large. Maximum size is 5MB.'
@@ -212,11 +175,7 @@ const updateProfile = async (req, res) => {
 
 const getProfile = async (req, res) => {
   try {
-    console.log('=== GET PROFILE REQUEST ===');
-    console.log('User ID:', req.user._id);
-    
     const user = req.user;
-    console.log('✅ Profile retrieved for:', user.email);
         
     res.status(200).json({
       success: true,
@@ -230,7 +189,7 @@ const getProfile = async (req, res) => {
           phone: user.phone,
           location: user.location,
           bio: user.bio,
-          avatar: user.avatar, // Now just a string URL
+          avatar: user.avatar, 
           specialize: user.specialize,
           categories: user.categories,
           role: user.role,
@@ -243,7 +202,7 @@ const getProfile = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Get profile error:', error);
+    console.error('Get profile error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error while retrieving profile',
