@@ -3,7 +3,6 @@ const Order = require('../models/Order');
 const getOrders = async (req, res) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 });
-    console.log("order history",orders);
     res.status(200).json(orders);
   } catch (error) {
     console.error('Get orders error:', error);
