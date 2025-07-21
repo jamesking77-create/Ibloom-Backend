@@ -1,23 +1,24 @@
-const Category = require('../models/Category');
+const Category = require("../models/Category");
+const cloudinary = require("../config/cloudinary");
+const fs = require("fs");
 
 const getCategories = async (req, res) => {
   try {
     const categories = await Category.find().sort({ id: 1 });
-    
+
     res.status(200).json({
       success: true,
-      message: 'Categories retrieved successfully',
+      message: "Categories retrieved successfully",
       data: {
-        categories
-      }
+        categories,
+      },
     });
-
   } catch (error) {
-    console.error('Get categories error:', error);
+    console.error("Get categories error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while retrieving categories',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while retrieving categories",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -26,28 +27,27 @@ const getCategoryById = async (req, res) => {
   try {
     const categoryId = req.params.id;
     const category = await Category.findOne({ id: categoryId });
-    
+
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: 'Category not found'
+        message: "Category not found",
       });
     }
-    
+
     res.status(200).json({
       success: true,
-      message: 'Category retrieved successfully',
+      message: "Category retrieved successfully",
       data: {
-        category
-      }
+        category,
+      },
     });
-
   } catch (error) {
-    console.error('Get category error:', error);
+    console.error("Get category error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while retrieving category',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while retrieving category",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -55,33 +55,26 @@ const getCategoryById = async (req, res) => {
 const updateCategory = async (req, res) => {
   try {
     const categoryId = req.params.id;
-    
+
     // Get current category data
     const currentCategory = await Category.findOne({ id: categoryId });
     if (!currentCategory) {
       return res.status(404).json({
         success: false,
-        message: 'Category not found'
+        message: "Category not found",
       });
     }
 
     // Parse request body data
-    let {
-      name,
-      image,
-      description,
-      itemCount,
-      hasQuotes,
-      items
-    } = req.body;
+    let { name, image, description, itemCount, hasQuotes, items } = req.body;
 
     // Parse JSON strings if they exist
     try {
-      if (typeof items === 'string') {
+      if (typeof items === "string") {
         items = JSON.parse(items);
       }
     } catch (parseError) {
-      console.log('JSON parse error:', parseError.message);
+      console.log("JSON parse error:", parseError.message);
     }
 
     const updateData = {};
@@ -96,7 +89,15 @@ const updateCategory = async (req, res) => {
 
     // Handle image upload if file is present
     if (req.file) {
-      updateData.image = req.file.path;
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: "categories",
+      });
+      updateData.image = result.secure_url;
+
+      // Delete temp file from server
+      fs.unlinkSync(req.file.path);
+    } else if (image !== undefined) {
+      updateData.image = image; // fallback if image URL provided
     }
 
     // Update category
@@ -109,13 +110,13 @@ const updateCategory = async (req, res) => {
     if (!updatedCategory) {
       return res.status(404).json({
         success: false,
-        message: 'Category not found'
+        message: "Category not found",
       });
     }
 
     const responseData = {
       success: true,
-      message: 'Category updated successfully',
+      message: "Category updated successfully",
       data: {
         category: {
           id: updatedCategory.id,
@@ -126,23 +127,24 @@ const updateCategory = async (req, res) => {
           hasQuotes: updatedCategory.hasQuotes,
           items: updatedCategory.items,
           createdAt: updatedCategory.createdAt,
-          updatedAt: updatedCategory.updatedAt
-        }
-      }
+          updatedAt: updatedCategory.updatedAt,
+        },
+      },
     };
 
     res.status(200).json(responseData);
-
   } catch (error) {
-    console.error('Update category error:', error);
-        
+    console.error("Update category error:", error);
+
     // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const validationErrors = Object.values(error.errors).map(err => err.message);
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: validationErrors
+        message: "Validation error",
+        errors: validationErrors,
       });
     }
 
@@ -150,22 +152,22 @@ const updateCategory = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Category with this ID already exists'
+        message: "Category with this ID already exists",
       });
     }
 
     // Handle multer errors
-    if (error.code === 'LIMIT_FILE_SIZE') {
+    if (error.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         success: false,
-        message: 'File size too large. Maximum size is 5MB.'
+        message: "File size too large. Maximum size is 5MB.",
       });
     }
 
     res.status(500).json({
       success: false,
-      message: 'Server error while updating category',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while updating category",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -173,38 +175,39 @@ const updateCategory = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     // Parse request body data
-    let {
-      id,
-      name,
-      image,
-      description,
-      itemCount,
-      hasQuotes,
-      items
-    } = req.body;
+    let { id, name, image, description, itemCount, hasQuotes, items } =
+      req.body;
 
     // Parse JSON strings if they exist
     try {
-      if (typeof items === 'string') {
+      if (typeof items === "string") {
         items = JSON.parse(items);
       }
     } catch (parseError) {
-      console.log('JSON parse error:', parseError.message);
+      console.log("JSON parse error:", parseError.message);
     }
 
     const categoryData = {
       id: parseInt(id),
       name,
       image,
-      description: description || '',
+      description: description || "",
       items: items || [],
       hasQuotes,
-      itemCount: Array.isArray(items) ? items.length : itemCount
+      itemCount: Array.isArray(items) ? items.length : itemCount,
     };
 
     // Handle image upload if file is present
     if (req.file) {
-      categoryData.image = req.file.path;
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'categories'
+      });
+      categoryData.image = result.secure_url;
+
+      // Delete temp file after upload
+      fs.unlinkSync(req.file.path);
+    } else if (image) {
+      categoryData.image = image; // fallback if image URL is sent in the body
     }
 
     // Create new category
@@ -213,7 +216,7 @@ const createCategory = async (req, res) => {
 
     const responseData = {
       success: true,
-      message: 'Category created successfully',
+      message: "Category created successfully",
       data: {
         category: {
           id: savedCategory.id,
@@ -224,23 +227,24 @@ const createCategory = async (req, res) => {
           itemCount: savedCategory.itemCount,
           items: savedCategory.items,
           createdAt: savedCategory.createdAt,
-          updatedAt: savedCategory.updatedAt
-        }
-      }
+          updatedAt: savedCategory.updatedAt,
+        },
+      },
     };
 
     res.status(201).json(responseData);
-
   } catch (error) {
-    console.error('Create category error:', error);
-        
+    console.error("Create category error:", error);
+
     // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const validationErrors = Object.values(error.errors).map(err => err.message);
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: validationErrors
+        message: "Validation error",
+        errors: validationErrors,
       });
     }
 
@@ -248,22 +252,22 @@ const createCategory = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Category with this ID already exists'
+        message: "Category with this ID already exists",
       });
     }
 
     // Handle multer errors
-    if (error.code === 'LIMIT_FILE_SIZE') {
+    if (error.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         success: false,
-        message: 'File size too large. Maximum size is 5MB.'
+        message: "File size too large. Maximum size is 5MB.",
       });
     }
 
     res.status(500).json({
       success: false,
-      message: 'Server error while creating category',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while creating category",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -271,12 +275,12 @@ const createCategory = async (req, res) => {
 const deleteCategory = async (req, res) => {
   try {
     const categoryId = req.params.id;
-    
+
     const category = await Category.findOne({ id: categoryId });
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: 'Category not found'
+        message: "Category not found",
       });
     }
 
@@ -284,49 +288,48 @@ const deleteCategory = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Category deleted successfully',
+      message: "Category deleted successfully",
       data: {
         deletedCategory: {
           id: category.id,
-          name: category.name
-        }
-      }
+          name: category.name,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Delete category error:', error);
+    console.error("Delete category error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while deleting category',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while deleting category",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
 const searchCategories = async (req, res) => {
   try {
-    const { 
-      q,         
-      name,        
-      minItems,   
-      maxItems,    
-      sortBy = 'id',
-      sortOrder = 'asc',
-      page = 1,    
-      limit = 10   
+    const {
+      q,
+      name,
+      minItems,
+      maxItems,
+      sortBy = "id",
+      sortOrder = "asc",
+      page = 1,
+      limit = 10,
     } = req.query;
 
     let searchCriteria = {};
 
     if (q) {
       searchCriteria.$or = [
-        { name: { $regex: q, $options: 'i' } },
-        { description: { $regex: q, $options: 'i' } }
+        { name: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
       ];
     }
 
     if (name) {
-      searchCriteria.name = { $regex: name, $options: 'i' };
+      searchCriteria.name = { $regex: name, $options: "i" };
     }
 
     if (minItems || maxItems) {
@@ -336,7 +339,7 @@ const searchCategories = async (req, res) => {
     }
 
     const sortCriteria = {};
-    sortCriteria[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    sortCriteria[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -345,7 +348,7 @@ const searchCategories = async (req, res) => {
         .sort(sortCriteria)
         .skip(skip)
         .limit(parseInt(limit)),
-      Category.countDocuments(searchCriteria)
+      Category.countDocuments(searchCriteria),
     ]);
 
     const totalPages = Math.ceil(totalCount / parseInt(limit));
@@ -354,7 +357,7 @@ const searchCategories = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Categories search completed successfully',
+      message: "Categories search completed successfully",
       data: {
         categories,
         pagination: {
@@ -363,7 +366,7 @@ const searchCategories = async (req, res) => {
           totalCount,
           hasNextPage,
           hasPrevPage,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         searchCriteria: {
           query: q,
@@ -371,17 +374,16 @@ const searchCategories = async (req, res) => {
           minItems,
           maxItems,
           sortBy,
-          sortOrder
-        }
-      }
+          sortOrder,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Search categories error:', error);
+    console.error("Search categories error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while searching categories',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while searching categories",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -391,7 +393,6 @@ module.exports = {
   getCategoryById,
   updateCategory,
   createCategory,
-  deleteCategory,      
-  searchCategories     
+  deleteCategory,
+  searchCategories,
 };
-
