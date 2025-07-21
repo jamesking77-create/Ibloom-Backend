@@ -71,6 +71,7 @@ const updateCategory = async (req, res) => {
       image,
       description,
       itemCount,
+      hasQuotes,
       items
     } = req.body;
 
@@ -91,6 +92,7 @@ const updateCategory = async (req, res) => {
       updateData.items = items;
       updateData.itemCount = Array.isArray(items) ? items.length : itemCount;
     }
+    updateData.hasQuotes = hasQuotes;
 
     // Handle image upload if file is present
     if (req.file) {
@@ -121,6 +123,7 @@ const updateCategory = async (req, res) => {
           image: updatedCategory.image,
           description: updatedCategory.description,
           itemCount: updatedCategory.itemCount,
+          hasQuotes: updateCategory.hasQuotes,
           items: updatedCategory.items,
           createdAt: updatedCategory.createdAt,
           updatedAt: updatedCategory.updatedAt
@@ -176,6 +179,7 @@ const createCategory = async (req, res) => {
       image,
       description,
       itemCount,
+      hasQuotes,
       items
     } = req.body;
 
@@ -194,6 +198,7 @@ const createCategory = async (req, res) => {
       image,
       description: description || '',
       items: items || [],
+      hasQuotes,
       itemCount: Array.isArray(items) ? items.length : itemCount
     };
 
@@ -215,6 +220,7 @@ const createCategory = async (req, res) => {
           name: savedCategory.name,
           image: savedCategory.image,
           description: savedCategory.description,
+          hasQuotes: savedCategory.hasQuotes,
           itemCount: savedCategory.itemCount,
           items: savedCategory.items,
           createdAt: savedCategory.createdAt,

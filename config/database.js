@@ -5,12 +5,13 @@ const connectDB = async () => {
   while (retries) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
-        // useNewUrlParser: true,
-        // useUnifiedTopology: true,
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
         maxPoolSize: 10,
         minPoolSize: 5,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
+        family: 4,
       });
       console.log('MongoDB Atlas Connected');
 
@@ -30,7 +31,7 @@ const connectDB = async () => {
         process.exit(0);
       });
 
-      break; // Exit loop on successful connection
+      break; // Exit loop on success
     } catch (err) {
       console.error('MongoDB Atlas Connection Error:', {
         message: err.message,
@@ -38,9 +39,9 @@ const connectDB = async () => {
         stack: err.stack,
       });
       retries -= 1;
-      console.log(`Retries left: ${retries}`);
+      console.log(`⏳ Retries left: ${retries}`);
       if (retries) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds before retrying
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s delay before retry
       } else {
         process.exit(1);
       }
