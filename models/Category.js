@@ -15,6 +15,7 @@ const CategorySchema = new mongoose.Schema(
     image: { type: String, default: '' },
     description: { type: String, trim: true, default: '' },
     itemCount: { type: Number, default: 0 },
+    hasQuotes: { type: Boolean, default: false },
     items: [ItemSchema]
   },
   {
