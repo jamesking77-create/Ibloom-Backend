@@ -123,7 +123,7 @@ const updateCategory = async (req, res) => {
           image: updatedCategory.image,
           description: updatedCategory.description,
           itemCount: updatedCategory.itemCount,
-          hasQuotes: updateCategory.hasQuotes,
+          hasQuotes: updatedCategory.hasQuotes,
           items: updatedCategory.items,
           createdAt: updatedCategory.createdAt,
           updatedAt: updatedCategory.updatedAt
