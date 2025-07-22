@@ -67,6 +67,7 @@ const updateCategory = async (req, res) => {
 
     // Parse request body data
     let { name, image, description, itemCount, hasQuotes, items } = req.body;
+    console.log("body",req.body);
 
     // Parse JSON strings if they exist
     try {
@@ -80,7 +81,9 @@ const updateCategory = async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
-    if (image !== undefined) updateData.image = image;
+    if (typeof image === "string" && image.trim() !== "") {
+      updateData.image = image;
+    }
     if (items !== undefined) {
       updateData.items = items;
       updateData.itemCount = Array.isArray(items) ? items.length : itemCount;
@@ -96,10 +99,7 @@ const updateCategory = async (req, res) => {
 
       // Delete temp file from server
       fs.unlinkSync(req.file.path);
-    } else if (image !== undefined) {
-      updateData.image = image; // fallback if image URL provided
     }
-
     // Update category
     const updatedCategory = await Category.findOneAndUpdate(
       { id: categoryId },
@@ -200,7 +200,7 @@ const createCategory = async (req, res) => {
     // Handle image upload if file is present
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'categories'
+        folder: "categories",
       });
       categoryData.image = result.secure_url;
 
