@@ -1,12 +1,12 @@
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
+    pass: process.env.EMAIL_PASSWORD,
+  },
 });
 
 // Function to send password reset email
@@ -14,7 +14,7 @@ const sendPasswordResetEmail = async (email, resetToken) => {
   const resetLink = `${process.env.CLIENT_URL}/resetPassword/${resetToken}`;
 
   // Log the email details for debugging
-  console.log('Sending password reset email:', {
+  console.log("Sending password reset email:", {
     to: email,
     resetLink,
     from: process.env.EMAIL_USER,
@@ -23,7 +23,7 @@ const sendPasswordResetEmail = async (email, resetToken) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
-    subject: 'Ibloom Password Reset Request',
+    subject: "Ibloom Password Reset Request",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <!-- Header with Logo -->
@@ -70,20 +70,20 @@ const sendPasswordResetEmail = async (email, resetToken) => {
           <p>If you have any questions, contact us at <a href="mailto:support@ibloom.com" style="color: #468E36; text-decoration: none;">support@ibloom.com</a>.</p>
         </div>
       </div>
-    `
+    `,
   };
 
   return new Promise((resolve, reject) => {
     transporter.sendMail(mailOptions, (err, info) => {
       if (err) {
-        console.error('Error sending email:', {
+        console.error("Error sending email:", {
           error: err.message,
           stack: err.stack,
           to: email,
         });
         reject(err);
       } else {
-        console.log('Password reset email sent:', {
+        console.log("Password reset email sent:", {
           to: email,
           messageId: info.messageId,
           response: info.response,
@@ -94,6 +94,54 @@ const sendPasswordResetEmail = async (email, resetToken) => {
   });
 };
 
+//Function to send indvividual emails
+const sendIndividualEmail = async ({
+  to,
+  subject,
+  message,
+  customerName,
+  attachments = [],
+}) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <p>Hello ${customerName || ""},</p>
+        <div>${message}</div>
+        <br />
+        <p style="color: gray; font-size: 12px;">Sent via Ibloom Email Service</p>
+      </div>
+    `,
+    attachments: attachments.map((att) => ({
+      filename: att.name,
+      path: att.url,
+      contentType: att.type,
+    })),
+  };
+
+  return new Promise((resolve, reject) => {
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        console.error("Error sending individual email:", {
+          error: err.message,
+          to,
+        });
+        reject(err);
+      } else {
+        console.log("Individual email sent:", {
+          to,
+          messageId: info.messageId,
+          response: info.response,
+        });
+        resolve(info);
+      }
+    });
+  });
+};
+
 module.exports = {
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendIndividualEmail,
 };
