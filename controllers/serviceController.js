@@ -197,17 +197,17 @@ const createCategory = async (req, res) => {
       itemCount: Array.isArray(items) ? items.length : itemCount,
     };
 
-    // Handle image upload if file is present
+ 
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "categories",
       });
       categoryData.image = result.secure_url;
 
-      // Delete temp file after upload
+   
       fs.unlinkSync(req.file.path);
     } else if (image) {
-      categoryData.image = image; // fallback if image URL is sent in the body
+      categoryData.image = image; 
     }
 
     // Create new category
