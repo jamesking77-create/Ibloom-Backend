@@ -1,20 +1,20 @@
 const Booking = require("../models/Bookings");
-const nodemailer = require('nodemailer');
-const PDFDocument = require('pdfkit'); // Add this import
+const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit"); // Add this import
 
 // Email configuration
 const transporter = nodemailer.createTransport({
   // Replace with your email service provider
-  service: 'gmail', // or your preferred service
+  service: "gmail", // or your preferred service
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
+    pass: process.env.EMAIL_PASSWORD,
+  },
 });
 
 // Admin notification email addresses
 const ADMIN_EMAILS = [
-  process.env.ADMIN_EMAIL || 'admin@youreventcompany.com',
+  process.env.ADMIN_EMAIL || "admin@youreventcompany.com",
   // Add more admin emails here if needed
   // 'admin2@youreventcompany.com',
 ];
@@ -32,7 +32,7 @@ const formatCurrency = (amount) => {
 const calculateFormattedPricing = (itemsSubtotal, taxRate = 0.075) => {
   const taxAmount = itemsSubtotal * taxRate;
   const totalAmount = itemsSubtotal + taxAmount;
-  
+
   return {
     itemsSubtotal,
     taxAmount,
@@ -40,8 +40,8 @@ const calculateFormattedPricing = (itemsSubtotal, taxRate = 0.075) => {
     formatted: {
       subtotal: formatCurrency(itemsSubtotal),
       tax: formatCurrency(taxAmount),
-      total: formatCurrency(totalAmount)
-    }
+      total: formatCurrency(totalAmount),
+    },
   };
 };
 
@@ -62,13 +62,19 @@ const getBookings = async (req, res) => {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const thisWeekBookings = bookings.filter(b => new Date(b.createdAt) >= oneWeekAgo);
-    const thisMonthBookings = bookings.filter(b => new Date(b.createdAt) >= oneMonthAgo);
+    const thisWeekBookings = bookings.filter(
+      (b) => new Date(b.createdAt) >= oneWeekAgo
+    );
+    const thisMonthBookings = bookings.filter(
+      (b) => new Date(b.createdAt) >= oneMonthAgo
+    );
 
     const totalRevenue = bookings
-      .filter(b => b.status === 'confirmed')
+      .filter((b) => b.status === "confirmed")
       .reduce((acc, b) => {
-        const amount = b.pricing?.totalAmount || parseFloat(b.amount?.replace(/[₦,]/g, "") || 0);
+        const amount =
+          b.pricing?.totalAmount ||
+          parseFloat(b.amount?.replace(/[₦,]/g, "") || 0);
         return acc + amount;
       }, 0);
 
@@ -81,33 +87,58 @@ const getBookings = async (req, res) => {
     res.status(200).json({ bookings, pagination, stats });
   } catch (error) {
     console.error("Get bookings error:", error);
-    res.status(500).json({ message: "Failed to fetch bookings", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch bookings", error: error.message });
   }
 };
 
 // Create a new booking
 const createBooking = async (req, res) => {
   try {
-    console.log("Creating booking with data:", JSON.stringify(req.body, null, 2));
+    console.log(
+      "Creating booking with data:",
+      JSON.stringify(req.body, null, 2)
+    );
+    console.log("=== DEBUGGING BOOKING CREATION ===");
+    console.log("req.body exists:", !!req.body);
+    console.log("req.body type:", typeof req.body);
+    console.log("req.body keys:", Object.keys(req.body || {}));
+    console.log("Raw request body:", JSON.stringify(req.body, null, 2));
+    console.log("Content-Type header:", req.headers["content-type"]);
+    console.log("=====================================");
+
+    // Check if body is empty or malformed
+    if (!req.body || Object.keys(req.body).length === 0) {
+      console.error("❌ Request body is empty or undefined");
+      return res.status(400).json({
+        message: "Request body is empty or malformed",
+        received: req.body,
+      });
+    }
 
     // Validate required fields
     const { customer, eventSchedule, services, pricing } = req.body;
-    
-    if (!customer?.personalInfo?.name || !customer?.personalInfo?.email || !customer?.personalInfo?.phone) {
-      return res.status(400).json({ 
-        message: "Missing required customer information" 
+
+    if (
+      !customer?.personalInfo?.name ||
+      !customer?.personalInfo?.email ||
+      !customer?.personalInfo?.phone
+    ) {
+      return res.status(400).json({
+        message: "Missing required customer information",
       });
     }
 
     if (!eventSchedule?.startDate || !eventSchedule?.endDate) {
-      return res.status(400).json({ 
-        message: "Missing required event schedule information" 
+      return res.status(400).json({
+        message: "Missing required event schedule information",
       });
     }
 
     if (!services || services.length === 0) {
-      return res.status(400).json({ 
-        message: "At least one service must be selected" 
+      return res.status(400).json({
+        message: "At least one service must be selected",
       });
     }
 
@@ -125,25 +156,30 @@ const createBooking = async (req, res) => {
       req.body.pricing = {
         ...pricing,
         ...calculatedPricing,
-        totalItems: services.reduce((sum, service) => sum + service.quantity, 0),
+        totalItems: services.reduce(
+          (sum, service) => sum + service.quantity,
+          0
+        ),
         totalServices: services.length,
-        currency: pricing.currency || 'NGN'
+        currency: pricing.currency || "NGN",
       };
     }
 
     // Set validation flags
     req.body.validation = {
-      hasCustomerInfo: !!(customer?.personalInfo?.name && customer?.personalInfo?.email),
+      hasCustomerInfo: !!(
+        customer?.personalInfo?.name && customer?.personalInfo?.email
+      ),
       hasEventSchedule: !!(eventSchedule?.startDate && eventSchedule?.endDate),
       hasServices: services && services.length > 0,
-      hasPricing: !!(pricing?.totalAmount)
+      hasPricing: !!pricing?.totalAmount,
     };
 
     // Set business data defaults
     req.body.businessData = {
       ...req.body.businessData,
-      deliveryRequired: customer?.eventDetails?.delivery === 'yes',
-      setupRequired: customer?.eventDetails?.installation === 'yes'
+      deliveryRequired: customer?.eventDetails?.delivery === "yes",
+      setupRequired: customer?.eventDetails?.installation === "yes",
     };
 
     // Create the booking
@@ -155,7 +191,7 @@ const createBooking = async (req, res) => {
     // Send emails in parallel (don't block the response)
     const emailPromises = [
       sendBookingConfirmationEmail(booking),
-      sendAdminNotificationEmail(booking)
+      sendAdminNotificationEmail(booking),
     ];
 
     // Execute all email sending in background
@@ -170,9 +206,9 @@ const createBooking = async (req, res) => {
     res.status(201).json(booking);
   } catch (error) {
     console.error("Create booking error:", error);
-    res.status(500).json({ 
-      message: "Failed to create booking", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to create booking",
+      error: error.message,
     });
   }
 };
@@ -187,9 +223,9 @@ const getBookingById = async (req, res) => {
     res.status(200).json(booking);
   } catch (error) {
     console.error("Get booking by ID error:", error);
-    res.status(500).json({ 
-      message: "Failed to fetch booking", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to fetch booking",
+      error: error.message,
     });
   }
 };
@@ -198,8 +234,12 @@ const getBookingById = async (req, res) => {
 const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    
-    if (!['pending_confirmation', 'confirmed', 'cancelled', 'pending'].includes(status)) {
+
+    if (
+      !["pending_confirmation", "confirmed", "cancelled", "pending"].includes(
+        status
+      )
+    ) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
@@ -212,20 +252,21 @@ const updateBookingStatus = async (req, res) => {
     booking.status = status;
     await booking.save();
 
-    console.log(`Booking ${booking.bookingId} status updated from ${oldStatus} to ${status}`);
+    console.log(
+      `Booking ${booking.bookingId} status updated from ${oldStatus} to ${status}`
+    );
 
     // Send status update email to customer (background)
-    sendStatusUpdateEmail(booking, oldStatus, status)
-      .catch((emailError) => {
-        console.error("Failed to send status update email:", emailError);
-      });
+    sendStatusUpdateEmail(booking, oldStatus, status).catch((emailError) => {
+      console.error("Failed to send status update email:", emailError);
+    });
 
     res.status(200).json({ status: booking.status });
   } catch (error) {
     console.error("Update booking status error:", error);
-    res.status(500).json({ 
-      message: "Failed to update status", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to update status",
+      error: error.message,
     });
   }
 };
@@ -234,8 +275,8 @@ const updateBookingStatus = async (req, res) => {
 const updateBookingPayment = async (req, res) => {
   try {
     const { paymentStatus, amountPaid } = req.body;
-    
-    if (!['unpaid', 'partial', 'paid'].includes(paymentStatus)) {
+
+    if (!["unpaid", "partial", "paid"].includes(paymentStatus)) {
       return res.status(400).json({ message: "Invalid payment status" });
     }
 
@@ -248,7 +289,9 @@ const updateBookingPayment = async (req, res) => {
     booking.amountPaid = amountPaid || 0;
     await booking.save();
 
-    console.log(`Booking ${booking.bookingId} payment updated: ${paymentStatus}, amount: ${amountPaid}`);
+    console.log(
+      `Booking ${booking.bookingId} payment updated: ${paymentStatus}, amount: ${amountPaid}`
+    );
 
     res.status(200).json({
       paymentStatus: booking.paymentStatus,
@@ -256,9 +299,9 @@ const updateBookingPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Update booking payment error:", error);
-    res.status(500).json({ 
-      message: "Failed to update payment", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to update payment",
+      error: error.message,
     });
   }
 };
@@ -276,16 +319,22 @@ const updateBookingItems = async (req, res) => {
     // Update services if provided (new format)
     if (services) {
       booking.services = services;
-      
+
       // Recalculate pricing
-      const itemsSubtotal = services.reduce((sum, service) => sum + service.subtotal, 0);
+      const itemsSubtotal = services.reduce(
+        (sum, service) => sum + service.subtotal,
+        0
+      );
       const calculatedPricing = calculateFormattedPricing(itemsSubtotal);
-      
+
       booking.pricing = {
         ...booking.pricing,
         ...calculatedPricing,
-        totalItems: services.reduce((sum, service) => sum + service.quantity, 0),
-        totalServices: services.length
+        totalItems: services.reduce(
+          (sum, service) => sum + service.quantity,
+          0
+        ),
+        totalServices: services.length,
       };
     }
 
@@ -296,7 +345,7 @@ const updateBookingItems = async (req, res) => {
 
     // Update amount if provided
     if (amount) {
-      if (typeof amount === 'number') {
+      if (typeof amount === "number") {
         booking.pricing = booking.pricing || {};
         booking.pricing.totalAmount = amount;
         booking.pricing.formatted = booking.pricing.formatted || {};
@@ -310,17 +359,17 @@ const updateBookingItems = async (req, res) => {
 
     console.log(`Booking ${booking.bookingId} items updated`);
 
-    res.status(200).json({ 
-      items: booking.items, 
+    res.status(200).json({
+      items: booking.items,
       services: booking.services,
       amount: booking.amount || booking.pricing?.formatted?.total,
-      pricing: booking.pricing 
+      pricing: booking.pricing,
     });
   } catch (error) {
     console.error("Update booking items error:", error);
-    res.status(500).json({ 
-      message: "Failed to update items", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to update items",
+      error: error.message,
     });
   }
 };
@@ -336,13 +385,14 @@ const generateInvoice = async (req, res) => {
     const { invoiceData } = req.body;
 
     // Generate invoice number if not provided
-    const invoiceNumber = invoiceData?.invoiceNumber || `INV-${booking.bookingId}`;
-    
+    const invoiceNumber =
+      invoiceData?.invoiceNumber || `INV-${booking.bookingId}`;
+
     // Update booking with invoice information
     booking.invoiceGenerated = true;
     booking.invoiceNumber = invoiceNumber;
     booking.lastInvoiceUpdate = new Date();
-    
+
     await booking.save();
 
     // Send invoice email
@@ -352,24 +402,26 @@ const generateInvoice = async (req, res) => {
       await booking.save();
     } catch (emailError) {
       console.error("Failed to send invoice email:", emailError);
-      return res.status(500).json({ 
-        message: "Invoice generated but failed to send email", 
-        error: emailError.message 
+      return res.status(500).json({
+        message: "Invoice generated but failed to send email",
+        error: emailError.message,
       });
     }
 
-    console.log(`Invoice ${invoiceNumber} generated and sent for booking ${booking.bookingId}`);
+    console.log(
+      `Invoice ${invoiceNumber} generated and sent for booking ${booking.bookingId}`
+    );
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "Invoice generated and sent successfully",
       invoiceNumber,
-      sentTo: booking.customer.personalInfo.email
+      sentTo: booking.customer.personalInfo.email,
     });
   } catch (error) {
     console.error("Generate invoice error:", error);
-    res.status(500).json({ 
-      message: "Failed to generate invoice", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to generate invoice",
+      error: error.message,
     });
   }
 };
@@ -380,8 +432,8 @@ const sendInvoiceByEmail = async (req, res) => {
     const { invoiceData, customerEmail, customerName } = req.body;
 
     if (!invoiceData || !customerEmail) {
-      return res.status(400).json({ 
-        message: "Missing required fields: invoiceData and customerEmail" 
+      return res.status(400).json({
+        message: "Missing required fields: invoiceData and customerEmail",
       });
     }
 
@@ -392,7 +444,12 @@ const sendInvoiceByEmail = async (req, res) => {
     const pdfBuffer = await generateInvoicePDF(invoiceData);
 
     // Send email with PDF attachment
-    await sendInvoiceEmailWithPDF(customerEmail, customerName, invoiceData, pdfBuffer);
+    await sendInvoiceEmailWithPDF(
+      customerEmail,
+      customerName,
+      invoiceData,
+      pdfBuffer
+    );
 
     // Optionally update booking record if bookingId is provided
     if (invoiceData.bookingId) {
@@ -404,25 +461,26 @@ const sendInvoiceByEmail = async (req, res) => {
           booking.invoiceSentAt = new Date();
           booking.lastInvoiceUpdate = new Date();
           await booking.save();
-          console.log(`Updated booking ${invoiceData.bookingId} with invoice info`);
+          console.log(
+            `Updated booking ${invoiceData.bookingId} with invoice info`
+          );
         }
       } catch (updateError) {
-        console.warn('Failed to update booking record:', updateError);
+        console.warn("Failed to update booking record:", updateError);
         // Don't fail the whole operation if booking update fails
       }
     }
 
     res.status(200).json({
-      message: 'Invoice sent successfully',
+      message: "Invoice sent successfully",
       sentTo: customerEmail,
-      invoiceNumber: invoiceData.invoiceNumber
+      invoiceNumber: invoiceData.invoiceNumber,
     });
-
   } catch (error) {
-    console.error('Failed to send invoice email:', error);
+    console.error("Failed to send invoice email:", error);
     res.status(500).json({
-      message: 'Failed to send invoice',
-      error: error.message
+      message: "Failed to send invoice",
+      error: error.message,
     });
   }
 };
@@ -441,7 +499,7 @@ const deleteBooking = async (req, res) => {
       customerName: booking.customer?.personalInfo?.name,
       customerEmail: booking.customer?.personalInfo?.email,
       eventType: booking.customer?.eventDetails?.eventType,
-      eventDate: booking.eventSchedule?.startDate
+      eventDate: booking.eventSchedule?.startDate,
     };
 
     await Booking.findByIdAndDelete(req.params.id);
@@ -450,21 +508,23 @@ const deleteBooking = async (req, res) => {
 
     // Optionally send cancellation email to customer
     if (bookingInfo.customerEmail) {
-      sendBookingDeletionEmail(bookingInfo)
-        .catch((emailError) => {
-          console.error("Failed to send deletion notification email:", emailError);
-        });
+      sendBookingDeletionEmail(bookingInfo).catch((emailError) => {
+        console.error(
+          "Failed to send deletion notification email:",
+          emailError
+        );
+      });
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "Booking deleted successfully",
-      deletedBookingId: bookingInfo.bookingId
+      deletedBookingId: bookingInfo.bookingId,
     });
   } catch (error) {
     console.error("Delete booking error:", error);
-    res.status(500).json({ 
-      message: "Failed to delete booking", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to delete booking",
+      error: error.message,
     });
   }
 };
@@ -477,19 +537,18 @@ const generateInvoicePDF = async (invoiceData) => {
       const buffers = [];
 
       // Collect PDF data
-      doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => {
+      doc.on("data", buffers.push.bind(buffers));
+      doc.on("end", () => {
         const pdfData = Buffer.concat(buffers);
         resolve(pdfData);
       });
-      doc.on('error', reject);
+      doc.on("error", reject);
 
       // Add content to PDF
       generatePDFContent(doc, invoiceData);
-      
+
       // Finalize the PDF
       doc.end();
-
     } catch (error) {
       reject(error);
     }
@@ -503,118 +562,162 @@ const generatePDFContent = (doc, invoiceData) => {
   const margin = 50;
 
   // Colors
-  const primaryColor = '#4F46E5';
-  const grayColor = '#6B7280';
-  const darkColor = '#1F2937';
+  const primaryColor = "#4F46E5";
+  const grayColor = "#6B7280";
+  const darkColor = "#1F2937";
 
   // Header
-  doc.fontSize(32)
-     .fillColor(primaryColor)
-     .text('INVOICE', margin, margin, { align: 'left' });
+  doc
+    .fontSize(32)
+    .fillColor(primaryColor)
+    .text("INVOICE", margin, margin, { align: "left" });
 
   // Invoice details (top right)
   const headerY = margin;
-  doc.fontSize(10)
-     .fillColor(darkColor)
-     .text(`Invoice #: ${invoiceData.invoiceNumber}`, pageWidth - 200, headerY)
-     .text(`Issue Date: ${new Date(invoiceData.issueDate).toLocaleDateString()}`, pageWidth - 200, headerY + 15)
-     .text(`Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}`, pageWidth - 200, headerY + 30);
+  doc
+    .fontSize(10)
+    .fillColor(darkColor)
+    .text(`Invoice #: ${invoiceData.invoiceNumber}`, pageWidth - 200, headerY)
+    .text(
+      `Issue Date: ${new Date(invoiceData.issueDate).toLocaleDateString()}`,
+      pageWidth - 200,
+      headerY + 15
+    )
+    .text(
+      `Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}`,
+      pageWidth - 200,
+      headerY + 30
+    );
 
   // Company logo placeholder
-  doc.rect(pageWidth - 130, headerY + 50, 80, 80)
-     .fillColor('#E5E7EB')
-     .fill();
-  
-  doc.fontSize(12)
-     .fillColor('#9CA3AF')
-     .text('LOGO', pageWidth - 110, headerY + 85);
+  doc
+    .rect(pageWidth - 130, headerY + 50, 80, 80)
+    .fillColor("#E5E7EB")
+    .fill();
+
+  doc
+    .fontSize(12)
+    .fillColor("#9CA3AF")
+    .text("LOGO", pageWidth - 110, headerY + 85);
 
   let currentY = headerY + 150;
 
   // From and To sections
-  doc.fontSize(12)
-     .fillColor(darkColor)
-     .font('Helvetica-Bold')
-     .text('From:', margin, currentY);
+  doc
+    .fontSize(12)
+    .fillColor(darkColor)
+    .font("Helvetica-Bold")
+    .text("From:", margin, currentY);
 
-  doc.font('Helvetica')
-     .fontSize(14)
-     .text(invoiceData.company.name, margin, currentY + 20)
-     .fontSize(10)
-     .text(invoiceData.company.address, margin, currentY + 40)
-     .text(`${invoiceData.company.city}, ${invoiceData.company.state}`, margin, currentY + 55)
-     .text(invoiceData.company.country, margin, currentY + 70)
-     .text(invoiceData.company.phone, margin, currentY + 90)
-     .text(invoiceData.company.email, margin, currentY + 105);
+  doc
+    .font("Helvetica")
+    .fontSize(14)
+    .text(invoiceData.company.name, margin, currentY + 20)
+    .fontSize(10)
+    .text(invoiceData.company.address, margin, currentY + 40)
+    .text(
+      `${invoiceData.company.city}, ${invoiceData.company.state}`,
+      margin,
+      currentY + 55
+    )
+    .text(invoiceData.company.country, margin, currentY + 70)
+    .text(invoiceData.company.phone, margin, currentY + 90)
+    .text(invoiceData.company.email, margin, currentY + 105);
 
   // Bill To section
   const billToX = pageWidth / 2 + 50;
-  doc.fontSize(12)
-     .fillColor(darkColor)
-     .font('Helvetica-Bold')
-     .text('Bill To:', billToX, currentY);
+  doc
+    .fontSize(12)
+    .fillColor(darkColor)
+    .font("Helvetica-Bold")
+    .text("Bill To:", billToX, currentY);
 
-  doc.font('Helvetica')
-     .fontSize(14)
-     .text(invoiceData.customer.name, billToX, currentY + 20)
-     .fontSize(10)
-     .text(invoiceData.customer.email, billToX, currentY + 40)
-     .text(invoiceData.customer.phone, billToX, currentY + 55)
-     .text(invoiceData.customer.address, billToX, currentY + 75);
+  doc
+    .font("Helvetica")
+    .fontSize(14)
+    .text(invoiceData.customer.name, billToX, currentY + 20)
+    .fontSize(10)
+    .text(invoiceData.customer.email, billToX, currentY + 40)
+    .text(invoiceData.customer.phone, billToX, currentY + 55)
+    .text(invoiceData.customer.address, billToX, currentY + 75);
 
   currentY += 150;
 
   // Event Details Box
-  doc.rect(margin, currentY, pageWidth - 2 * margin, 80)
-     .fillColor('#F3F4F6')
-     .fill();
+  doc
+    .rect(margin, currentY, pageWidth - 2 * margin, 80)
+    .fillColor("#F3F4F6")
+    .fill();
 
-  doc.fontSize(12)
-     .fillColor(primaryColor)
-     .font('Helvetica-Bold')
-     .text('Event Details', margin + 15, currentY + 15);
+  doc
+    .fontSize(12)
+    .fillColor(primaryColor)
+    .font("Helvetica-Bold")
+    .text("Event Details", margin + 15, currentY + 15);
 
   const eventY = currentY + 35;
   const eventCol1 = margin + 15;
   const eventCol2 = pageWidth / 2 + 25;
 
-  doc.fontSize(9)
-     .fillColor(darkColor)
-     .font('Helvetica')
-     .text(`Type: ${invoiceData.event.type}`, eventCol1, eventY)
-     .text(`Date: ${new Date(invoiceData.event.date).toLocaleDateString()}`, eventCol2, eventY)
-     .text(`Time: ${invoiceData.event.time}`, eventCol1, eventY + 15)
-     .text(`Guests: ${invoiceData.event.guests}`, eventCol2, eventY + 15)
-     .text(`Location: ${invoiceData.event.location}`, eventCol1, eventY + 30, { width: pageWidth - 2 * margin - 30 });
+  doc
+    .fontSize(9)
+    .fillColor(darkColor)
+    .font("Helvetica")
+    .text(`Type: ${invoiceData.event.type}`, eventCol1, eventY)
+    .text(
+      `Date: ${new Date(invoiceData.event.date).toLocaleDateString()}`,
+      eventCol2,
+      eventY
+    )
+    .text(`Time: ${invoiceData.event.time}`, eventCol1, eventY + 15)
+    .text(`Guests: ${invoiceData.event.guests}`, eventCol2, eventY + 15)
+    .text(`Location: ${invoiceData.event.location}`, eventCol1, eventY + 30, {
+      width: pageWidth - 2 * margin - 30,
+    });
 
   currentY += 100;
 
   // Services Table
-  const allServices = [...invoiceData.services, ...invoiceData.additionalServices.filter(s => s.total > 0)];
-  
+  const allServices = [
+    ...invoiceData.services,
+    ...invoiceData.additionalServices.filter((s) => s.total > 0),
+  ];
+
   if (allServices.length > 0) {
     // Table header
-    doc.fontSize(12)
-       .fillColor(primaryColor)
-       .font('Helvetica-Bold')
-       .text('Services', margin, currentY);
+    doc
+      .fontSize(12)
+      .fillColor(primaryColor)
+      .font("Helvetica-Bold")
+      .text("Services", margin, currentY);
 
     currentY += 25;
 
     // Simple table layout
     allServices.forEach((service, index) => {
-      doc.fontSize(10)
-         .fillColor(darkColor)
-         .font('Helvetica-Bold')
-         .text(`${service.name} (Qty: ${service.quantity})`, margin, currentY)
-         .font('Helvetica')
-         .text(`₦${service.total.toLocaleString('en-NG', {minimumFractionDigits: 2})}`, pageWidth - 150, currentY, { align: 'right' });
+      doc
+        .fontSize(10)
+        .fillColor(darkColor)
+        .font("Helvetica-Bold")
+        .text(`${service.name} (Qty: ${service.quantity})`, margin, currentY)
+        .font("Helvetica")
+        .text(
+          `₦${service.total.toLocaleString("en-NG", {
+            minimumFractionDigits: 2,
+          })}`,
+          pageWidth - 150,
+          currentY,
+          { align: "right" }
+        );
 
       if (service.description) {
         currentY += 15;
-        doc.fontSize(8)
-           .fillColor(grayColor)
-           .text(service.description, margin, currentY, { width: pageWidth - 2 * margin - 150 });
+        doc
+          .fontSize(8)
+          .fillColor(grayColor)
+          .text(service.description, margin, currentY, {
+            width: pageWidth - 2 * margin - 150,
+          });
       }
 
       currentY += 25;
@@ -625,34 +728,70 @@ const generatePDFContent = (doc, invoiceData) => {
   currentY += 20;
   const totalsX = pageWidth - 300;
 
-  doc.fontSize(10)
-     .fillColor(darkColor)
-     .font('Helvetica')
-     .text('Subtotal:', totalsX, currentY)
-     .text(`₦${invoiceData.subtotal.toLocaleString('en-NG', {minimumFractionDigits: 2})}`, totalsX + 150, currentY, { align: 'right' })
-     
-     .text(`Tax (${(invoiceData.taxRate * 100).toFixed(1)}%):`, totalsX, currentY + 20)
-     .text(`₦${invoiceData.tax.toLocaleString('en-NG', {minimumFractionDigits: 2})}`, totalsX + 150, currentY + 20, { align: 'right' });
+  doc
+    .fontSize(10)
+    .fillColor(darkColor)
+    .font("Helvetica")
+    .text("Subtotal:", totalsX, currentY)
+    .text(
+      `₦${invoiceData.subtotal.toLocaleString("en-NG", {
+        minimumFractionDigits: 2,
+      })}`,
+      totalsX + 150,
+      currentY,
+      { align: "right" }
+    )
+
+    .text(
+      `Tax (${(invoiceData.taxRate * 100).toFixed(1)}%):`,
+      totalsX,
+      currentY + 20
+    )
+    .text(
+      `₦${invoiceData.tax.toLocaleString("en-NG", {
+        minimumFractionDigits: 2,
+      })}`,
+      totalsX + 150,
+      currentY + 20,
+      { align: "right" }
+    );
 
   // Total line
-  doc.moveTo(totalsX, currentY + 35)
-     .lineTo(totalsX + 250, currentY + 35)
-     .strokeColor(darkColor)
-     .lineWidth(2)
-     .stroke();
+  doc
+    .moveTo(totalsX, currentY + 35)
+    .lineTo(totalsX + 250, currentY + 35)
+    .strokeColor(darkColor)
+    .lineWidth(2)
+    .stroke();
 
-  doc.fontSize(14)
-     .font('Helvetica-Bold')
-     .text('Total:', totalsX, currentY + 45)
-     .text(`₦${invoiceData.total.toLocaleString('en-NG', {minimumFractionDigits: 2})}`, totalsX + 150, currentY + 45, { align: 'right' });
+  doc
+    .fontSize(14)
+    .font("Helvetica-Bold")
+    .text("Total:", totalsX, currentY + 45)
+    .text(
+      `₦${invoiceData.total.toLocaleString("en-NG", {
+        minimumFractionDigits: 2,
+      })}`,
+      totalsX + 150,
+      currentY + 45,
+      { align: "right" }
+    );
 
   // Deposit info if required
   if (invoiceData.requiresDeposit) {
-    doc.fontSize(11)
-       .fillColor('#EA580C')
-       .font('Helvetica-Bold')
-       .text('Deposit Required (50%):', totalsX, currentY + 70)
-       .text(`₦${invoiceData.depositAmount.toLocaleString('en-NG', {minimumFractionDigits: 2})}`, totalsX + 150, currentY + 70, { align: 'right' });
+    doc
+      .fontSize(11)
+      .fillColor("#EA580C")
+      .font("Helvetica-Bold")
+      .text("Deposit Required (50%):", totalsX, currentY + 70)
+      .text(
+        `₦${invoiceData.depositAmount.toLocaleString("en-NG", {
+          minimumFractionDigits: 2,
+        })}`,
+        totalsX + 150,
+        currentY + 70,
+        { align: "right" }
+      );
   }
 
   currentY += 120;
@@ -660,48 +799,70 @@ const generatePDFContent = (doc, invoiceData) => {
   // Notes and Terms
   if (invoiceData.notes || invoiceData.terms) {
     if (invoiceData.notes) {
-      doc.fontSize(12)
-         .fillColor(primaryColor)
-         .font('Helvetica-Bold')
-         .text('Notes', margin, currentY);
+      doc
+        .fontSize(12)
+        .fillColor(primaryColor)
+        .font("Helvetica-Bold")
+        .text("Notes", margin, currentY);
 
-      doc.fontSize(10)
-         .fillColor(darkColor)
-         .font('Helvetica')
-         .text(invoiceData.notes, margin, currentY + 20, { width: pageWidth - 2 * margin });
+      doc
+        .fontSize(10)
+        .fillColor(darkColor)
+        .font("Helvetica")
+        .text(invoiceData.notes, margin, currentY + 20, {
+          width: pageWidth - 2 * margin,
+        });
 
       currentY += 60;
     }
 
     if (invoiceData.terms) {
-      doc.fontSize(12)
-         .fillColor(primaryColor)
-         .font('Helvetica-Bold')
-         .text('Terms & Conditions', margin, currentY);
+      doc
+        .fontSize(12)
+        .fillColor(primaryColor)
+        .font("Helvetica-Bold")
+        .text("Terms & Conditions", margin, currentY);
 
-      doc.fontSize(9)
-         .fillColor(grayColor)
-         .font('Helvetica')
-         .text(invoiceData.terms, margin, currentY + 20, { width: pageWidth - 2 * margin });
+      doc
+        .fontSize(9)
+        .fillColor(grayColor)
+        .font("Helvetica")
+        .text(invoiceData.terms, margin, currentY + 20, {
+          width: pageWidth - 2 * margin,
+        });
     }
   }
 
   // Footer
   const footerY = pageHeight - 100;
-  doc.fontSize(12)
-     .fillColor(darkColor)
-     .font('Helvetica-Bold')
-     .text('Thank you for your business!', margin, footerY, { align: 'center', width: pageWidth - 2 * margin });
+  doc
+    .fontSize(12)
+    .fillColor(darkColor)
+    .font("Helvetica-Bold")
+    .text("Thank you for your business!", margin, footerY, {
+      align: "center",
+      width: pageWidth - 2 * margin,
+    });
 
-  doc.fontSize(8)
-     .fillColor(grayColor)
-     .font('Helvetica')
-     .text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
-            margin, footerY + 20, { align: 'center', width: pageWidth - 2 * margin });
+  doc
+    .fontSize(8)
+    .fillColor(grayColor)
+    .font("Helvetica")
+    .text(
+      `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
+      margin,
+      footerY + 20,
+      { align: "center", width: pageWidth - 2 * margin }
+    );
 };
 
 // Enhanced email sending function for invoices with PDF
-const sendInvoiceEmailWithPDF = async (customerEmail, customerName, invoiceData, pdfBuffer) => {
+const sendInvoiceEmailWithPDF = async (
+  customerEmail,
+  customerName,
+  invoiceData,
+  pdfBuffer
+) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: customerEmail,
@@ -711,9 +872,9 @@ const sendInvoiceEmailWithPDF = async (customerEmail, customerName, invoiceData,
       {
         filename: `Invoice-${invoiceData.invoiceNumber}.pdf`,
         content: pdfBuffer,
-        contentType: 'application/pdf'
-      }
-    ]
+        contentType: "application/pdf",
+      },
+    ],
   };
 
   await transporter.sendMail(mailOptions);
@@ -751,15 +912,21 @@ const generateInvoiceEmailHTML = (customerName, invoiceData) => {
         <table style="width: 100%; border-collapse: collapse;">
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Invoice Number:</td>
-            <td style="padding: 12px 0; font-weight: bold;">${invoiceData.invoiceNumber}</td>
+            <td style="padding: 12px 0; font-weight: bold;">${
+              invoiceData.invoiceNumber
+            }</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Issue Date:</td>
-            <td style="padding: 12px 0;">${new Date(invoiceData.issueDate).toLocaleDateString()}</td>
+            <td style="padding: 12px 0;">${new Date(
+              invoiceData.issueDate
+            ).toLocaleDateString()}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Due Date:</td>
-            <td style="padding: 12px 0; color: #DC2626; font-weight: bold;">${new Date(invoiceData.dueDate).toLocaleDateString()}</td>
+            <td style="padding: 12px 0; color: #DC2626; font-weight: bold;">${new Date(
+              invoiceData.dueDate
+            ).toLocaleDateString()}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Event Type:</td>
@@ -767,18 +934,30 @@ const generateInvoiceEmailHTML = (customerName, invoiceData) => {
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Event Date:</td>
-            <td style="padding: 12px 0;">${new Date(invoiceData.event.date).toLocaleDateString()}</td>
+            <td style="padding: 12px 0;">${new Date(
+              invoiceData.event.date
+            ).toLocaleDateString()}</td>
           </tr>
           <tr style="background: #F0FDF4;">
             <td style="padding: 15px 0; font-weight: bold; color: #166534; font-size: 16px;">Total Amount:</td>
-            <td style="padding: 15px 0; font-weight: bold; color: #059669; font-size: 20px;">₦${invoiceData.total.toLocaleString('en-NG', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 15px 0; font-weight: bold; color: #059669; font-size: 20px;">₦${invoiceData.total.toLocaleString(
+              "en-NG",
+              { minimumFractionDigits: 2 }
+            )}</td>
           </tr>
-          ${invoiceData.requiresDeposit ? `
+          ${
+            invoiceData.requiresDeposit
+              ? `
           <tr style="background: #FEF3C7;">
             <td style="padding: 12px 0; font-weight: bold; color: #92400E;">Deposit Required:</td>
-            <td style="padding: 12px 0; font-weight: bold; color: #D97706;">₦${invoiceData.depositAmount.toLocaleString('en-NG', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 12px 0; font-weight: bold; color: #D97706;">₦${invoiceData.depositAmount.toLocaleString(
+              "en-NG",
+              { minimumFractionDigits: 2 }
+            )}</td>
           </tr>
-          ` : ''}
+          `
+              : ""
+          }
         </table>
       </div>
 
@@ -811,9 +990,15 @@ const generateInvoiceEmailHTML = (customerName, invoiceData) => {
       <div style="background: #FEF2F2; border: 2px solid #FECACA; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
         <h3 style="color: #DC2626; margin-top: 0;">⚠️ Important Notes</h3>
         <ul style="color: #7F1D1D; padding-left: 20px; margin: 0;">
-          <li style="margin-bottom: 8px;">Payment is due by <strong>${new Date(invoiceData.dueDate).toLocaleDateString()}</strong></li>
+          <li style="margin-bottom: 8px;">Payment is due by <strong>${new Date(
+            invoiceData.dueDate
+          ).toLocaleDateString()}</strong></li>
           <li style="margin-bottom: 8px;">Late payments may incur additional fees</li>
-          ${invoiceData.requiresDeposit ? '<li style="margin-bottom: 8px;">A deposit is required to secure your booking</li>' : ''}
+          ${
+            invoiceData.requiresDeposit
+              ? '<li style="margin-bottom: 8px;">A deposit is required to secure your booking</li>'
+              : ""
+          }
           <li style="margin-bottom: 8px;">Please quote the invoice number when making payment</li>
           <li style="margin-bottom: 8px;">Contact us immediately if you have any questions</li>
         </ul>
@@ -836,10 +1021,14 @@ const generateInvoiceEmailHTML = (customerName, invoiceData) => {
         <h3 style="color: #374151; margin-top: 0;">📞 Need Help?</h3>
         <p style="margin: 10px 0; color: #6B7280;">Our team is here to assist you with any questions about your invoice or booking.</p>
         <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
-          <a href="mailto:${invoiceData.company.email}" style="color: #4F46E5; text-decoration: none; font-weight: bold;">
+          <a href="mailto:${
+            invoiceData.company.email
+          }" style="color: #4F46E5; text-decoration: none; font-weight: bold;">
             📧 ${invoiceData.company.email}
           </a>
-          <a href="tel:${invoiceData.company.phone}" style="color: #4F46E5; text-decoration: none; font-weight: bold;">
+          <a href="tel:${
+            invoiceData.company.phone
+          }" style="color: #4F46E5; text-decoration: none; font-weight: bold;">
             📱 ${invoiceData.company.phone}
           </a>
         </div>
@@ -883,7 +1072,9 @@ const sendBookingDeletionEmail = async (bookingInfo) => {
         </div>
 
         <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-          <h2 style="color: #1F2937; margin-top: 0;">Hello ${bookingInfo.customerName}! 👋</h2>
+          <h2 style="color: #1F2937; margin-top: 0;">Hello ${
+            bookingInfo.customerName
+          }! 👋</h2>
           <p>We regret to inform you that your booking has been cancelled.</p>
         </div>
 
@@ -896,11 +1087,15 @@ const sendBookingDeletionEmail = async (bookingInfo) => {
             </tr>
             <tr>
               <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Event Type:</td>
-              <td style="padding: 8px 0;">${bookingInfo.eventType || 'N/A'}</td>
+              <td style="padding: 8px 0;">${bookingInfo.eventType || "N/A"}</td>
             </tr>
             <tr>
               <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Event Date:</td>
-              <td style="padding: 8px 0;">${bookingInfo.eventDate ? new Date(bookingInfo.eventDate).toLocaleDateString() : 'N/A'}</td>
+              <td style="padding: 8px 0;">${
+                bookingInfo.eventDate
+                  ? new Date(bookingInfo.eventDate).toLocaleDateString()
+                  : "N/A"
+              }</td>
             </tr>
           </table>
         </div>
@@ -912,28 +1107,32 @@ const sendBookingDeletionEmail = async (bookingInfo) => {
 
         <div style="text-align: center; padding: 20px; background: #F8FAFC; border-radius: 8px;">
           <p style="margin: 0; color: #6B7280; font-size: 14px;">
-            Questions? Contact us at <a href="mailto:${process.env.EMAIL_USER}" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
+            Questions? Contact us at <a href="mailto:${
+              process.env.EMAIL_USER
+            }" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
           </p>
         </div>
       </body>
       </html>
-    `
+    `,
   };
 
   await transporter.sendMail(mailOptions);
-  console.log(`Deletion notification email sent to: ${bookingInfo.customerEmail}`);
+  console.log(
+    `Deletion notification email sent to: ${bookingInfo.customerEmail}`
+  );
 };
 
 // All your existing email functions remain the same...
 const sendBookingConfirmationEmail = async (booking) => {
   const customerEmail = booking.customer.personalInfo.email;
   const customerName = booking.customer.personalInfo.name;
-  
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: customerEmail,
     subject: `Booking Confirmation - ${booking.bookingId}`,
-    html: generateCustomerConfirmationHTML(booking, customerName)
+    html: generateCustomerConfirmationHTML(booking, customerName),
   };
 
   await transporter.sendMail(mailOptions);
@@ -941,49 +1140,55 @@ const sendBookingConfirmationEmail = async (booking) => {
 };
 
 const sendAdminNotificationEmail = async (booking) => {
-  const adminEmailPromises = ADMIN_EMAILS.map(adminEmail => {
+  const adminEmailPromises = ADMIN_EMAILS.map((adminEmail) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: adminEmail,
       subject: `🚨 NEW BOOKING ALERT - ${booking.bookingId}`,
-      html: generateAdminNotificationHTML(booking)
+      html: generateAdminNotificationHTML(booking),
     };
 
     return transporter.sendMail(mailOptions);
   });
 
   await Promise.all(adminEmailPromises);
-  console.log(`Admin notification emails sent to: ${ADMIN_EMAILS.join(', ')}`);
+  console.log(`Admin notification emails sent to: ${ADMIN_EMAILS.join(", ")}`);
 };
 
 const sendStatusUpdateEmail = async (booking, oldStatus, newStatus) => {
   const customerEmail = booking.customer.personalInfo.email;
   const customerName = booking.customer.personalInfo.name;
-  
+
   let subject, message, color;
-  
+
   switch (newStatus) {
-    case 'confirmed':
+    case "confirmed":
       subject = `✅ Booking Confirmed - ${booking.bookingId}`;
-      message = 'Great news! Your booking has been confirmed.';
-      color = '#10B981';
+      message = "Great news! Your booking has been confirmed.";
+      color = "#10B981";
       break;
-    case 'cancelled':
+    case "cancelled":
       subject = `❌ Booking Cancelled - ${booking.bookingId}`;
-      message = 'We regret to inform you that your booking has been cancelled.';
-      color = '#EF4444';
+      message = "We regret to inform you that your booking has been cancelled.";
+      color = "#EF4444";
       break;
     default:
       subject = `📋 Booking Update - ${booking.bookingId}`;
       message = `Your booking status has been updated to: ${newStatus}`;
-      color = '#F59E0B';
+      color = "#F59E0B";
   }
-  
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: customerEmail,
     subject: subject,
-    html: generateStatusUpdateHTML(booking, customerName, message, color, newStatus)
+    html: generateStatusUpdateHTML(
+      booking,
+      customerName,
+      message,
+      color,
+      newStatus
+    ),
   };
 
   await transporter.sendMail(mailOptions);
@@ -993,12 +1198,12 @@ const sendStatusUpdateEmail = async (booking, oldStatus, newStatus) => {
 const sendInvoiceEmail = async (booking, invoiceData) => {
   const customerEmail = booking.customer.personalInfo.email;
   const customerName = booking.customer.personalInfo.name;
-  
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: customerEmail,
     subject: `💰 Invoice ${invoiceData.invoiceNumber} - ${booking.bookingId}`,
-    html: generateInvoiceHTML(booking, customerName, invoiceData)
+    html: generateInvoiceHTML(booking, customerName, invoiceData),
   };
 
   await transporter.sendMail(mailOptions);
@@ -1008,13 +1213,23 @@ const sendInvoiceEmail = async (booking, invoiceData) => {
 // HTML Email Templates (keeping your existing ones)
 const generateCustomerConfirmationHTML = (booking, customerName) => {
   const services = booking.services || [];
-  const servicesHTML = services.map(service => `
+  const servicesHTML = services
+    .map(
+      (service) => `
     <tr>
-      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${service.name}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; text-align: center;">${service.quantity}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; text-align: right;">${formatCurrency(service.subtotal)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${
+        service.name
+      }</td>
+      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; text-align: center;">${
+        service.quantity
+      }</td>
+      <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; text-align: right;">${formatCurrency(
+        service.subtotal
+      )}</td>
     </tr>
-  `).join('');
+  `
+    )
+    .join("");
 
   return `
     <!DOCTYPE html>
@@ -1047,23 +1262,33 @@ const generateCustomerConfirmationHTML = (booking, customerName) => {
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Event Type:</td>
-            <td style="padding: 8px 0;">${booking.customer.eventDetails.eventType}</td>
+            <td style="padding: 8px 0;">${
+              booking.customer.eventDetails.eventType
+            }</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Date & Time:</td>
-            <td style="padding: 8px 0;">${booking.eventSchedule.formatted?.fullSchedule}</td>
+            <td style="padding: 8px 0;">${
+              booking.eventSchedule.formatted?.fullSchedule
+            }</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Location:</td>
-            <td style="padding: 8px 0;">${booking.customer.eventDetails.location}</td>
+            <td style="padding: 8px 0;">${
+              booking.customer.eventDetails.location
+            }</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Guests:</td>
-            <td style="padding: 8px 0;">${booking.customer.eventDetails.numberOfGuests} people</td>
+            <td style="padding: 8px 0;">${
+              booking.customer.eventDetails.numberOfGuests
+            } people</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Total Amount:</td>
-            <td style="padding: 8px 0; font-weight: bold; color: #10B981; font-size: 18px;">${booking.pricing?.formatted?.total}</td>
+            <td style="padding: 8px 0; font-weight: bold; color: #10B981; font-size: 18px;">${
+              booking.pricing?.formatted?.total
+            }</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Status:</td>
@@ -1072,7 +1297,9 @@ const generateCustomerConfirmationHTML = (booking, customerName) => {
         </table>
       </div>
 
-      ${services.length > 0 ? `
+      ${
+        services.length > 0
+          ? `
         <div style="background: white; border: 2px solid #E5E7EB; border-radius: 8px; padding: 25px; margin-bottom: 25px;">
           <h3 style="color: #4F46E5; margin-top: 0;">🛍️ Selected Services</h3>
           <table style="width: 100%; border-collapse: collapse;">
@@ -1088,7 +1315,9 @@ const generateCustomerConfirmationHTML = (booking, customerName) => {
             </tbody>
           </table>
         </div>
-      ` : ''}
+      `
+          : ""
+      }
 
       <div style="background: #EFF6FF; border: 2px solid #DBEAFE; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
         <h3 style="color: #1E40AF; margin-top: 0;">📞 What happens next?</h3>
@@ -1111,7 +1340,9 @@ const generateCustomerConfirmationHTML = (booking, customerName) => {
 
       <div style="text-align: center; padding: 20px; background: #F8FAFC; border-radius: 8px;">
         <p style="margin: 0; color: #6B7280; font-size: 14px;">
-          Questions? Contact us at <a href="mailto:${process.env.EMAIL_USER}" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
+          Questions? Contact us at <a href="mailto:${
+            process.env.EMAIL_USER
+          }" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
         </p>
         <p style="margin: 10px 0 0 0; color: #9CA3AF; font-size: 12px;">
           This email was sent automatically. Please do not reply to this email.
@@ -1128,23 +1359,23 @@ const generateCustomerConfirmationHTML = (booking, customerName) => {
 
 // Helper function to format date time range for emails
 const formatDateTimeRange = (eventSchedule) => {
-  if (!eventSchedule) return 'N/A';
-  
+  if (!eventSchedule) return "N/A";
+
   const formatDate = (dateString) => {
-    if (!dateString) return '';
+    if (!dateString) return "";
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
   const formatTime = (timeString) => {
-    if (!timeString) return '';
-    const [hours, minutes] = timeString.split(':');
+    if (!timeString) return "";
+    const [hours, minutes] = timeString.split(":");
     const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const ampm = hour >= 12 ? "PM" : "AM";
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
   };
@@ -1162,7 +1393,13 @@ const formatDateTimeRange = (eventSchedule) => {
 };
 
 // Complete generateStatusUpdateHTML function
-const generateStatusUpdateHTML = (booking, customerName, message, color, newStatus) => {
+const generateStatusUpdateHTML = (
+  booking,
+  customerName,
+  message,
+  color,
+  newStatus
+) => {
   return `
     <!DOCTYPE html>
     <html>
@@ -1191,11 +1428,15 @@ const generateStatusUpdateHTML = (booking, customerName, message, color, newStat
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Event Type:</td>
-            <td style="padding: 8px 0;">${booking.customer?.eventDetails?.eventType || 'N/A'}</td>
+            <td style="padding: 8px 0;">${
+              booking.customer?.eventDetails?.eventType || "N/A"
+            }</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Date & Time:</td>
-            <td style="padding: 8px 0;">${formatDateTimeRange(booking.eventSchedule)}</td>
+            <td style="padding: 8px 0;">${formatDateTimeRange(
+              booking.eventSchedule
+            )}</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Status:</td>
@@ -1206,7 +1447,9 @@ const generateStatusUpdateHTML = (booking, customerName, message, color, newStat
 
       <div style="text-align: center; padding: 20px; background: #F8FAFC; border-radius: 8px;">
         <p style="margin: 0; color: #6B7280; font-size: 14px;">
-          Questions? Contact us at <a href="mailto:${process.env.EMAIL_USER}" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
+          Questions? Contact us at <a href="mailto:${
+            process.env.EMAIL_USER
+          }" style="color: #4F46E5;">${process.env.EMAIL_USER}</a>
         </p>
       </div>
     </body>
@@ -1222,6 +1465,6 @@ module.exports = {
   updateBookingPayment,
   updateBookingItems,
   generateInvoice,
-  sendInvoiceByEmail,  // NEW: Add this export
-  deleteBooking,       // NEW: Add this export
+  sendInvoiceByEmail, // NEW: Add this export
+  deleteBooking, // NEW: Add this export
 };
