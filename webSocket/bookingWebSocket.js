@@ -1,4 +1,4 @@
-// bokingwebsocket.js - FIXED VERSION with CORS support
+// bookingWebSocket.js - FIXED VERSION with proper CORS support
 const WebSocket = require('ws');
 
 class BookingWebSocketServer {
@@ -14,25 +14,64 @@ class BookingWebSocketServer {
       this.wss = new WebSocket.Server({ 
         server,
         path: '/websocket',
-        // Add CORS support
+        // FIXED: Enhanced CORS support for cross-device communication
         verifyClient: (info) => {
-          // Allow all origins in production, or specify your frontend URL
           const allowedOrigins = [
             'https://ibloomrentals.com',
+            'https://www.ibloomrentals.com',
             'http://localhost:3000',
             'http://localhost:3001',
-            'https://localhost:3001'
+            'http://localhost:5173',
+            'https://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173',
+            // Add your Netlify preview URLs if needed
+            /^https:\/\/.*\.netlify\.app$/,
+            // Add your frontend production domain
+            /^https:\/\/ibloomrentals\.com$/,
           ];
           
           const origin = info.origin;
-          console.log('🔍 WebSocket connection attempt from origin:', origin);
+          const userAgent = info.req.headers['user-agent'] || '';
+          const ip = info.req.connection.remoteAddress || info.req.socket.remoteAddress;
           
-          // In production, you might want to be more restrictive
+          console.log('🔍 WebSocket connection attempt:', {
+            origin,
+            ip,
+            userAgent: userAgent.substring(0, 100) + '...',
+            timestamp: new Date().toISOString()
+          });
+          
+          // FIXED: More permissive CORS for mobile devices
           if (process.env.NODE_ENV === 'production') {
-            return allowedOrigins.includes(origin) || !origin; // Allow no origin for native apps
+            // In production, be more permissive for mobile apps
+            if (!origin) {
+              console.log('✅ Allowing connection without origin (likely mobile app)');
+              return true; // Allow mobile apps and native clients
+            }
+            
+            // Check against allowed origins (including regex patterns)
+            const isAllowed = allowedOrigins.some(allowed => {
+              if (typeof allowed === 'string') {
+                return origin === allowed;
+              } else if (allowed instanceof RegExp) {
+                return allowed.test(origin);
+              }
+              return false;
+            });
+            
+            if (isAllowed) {
+              console.log('✅ Origin allowed:', origin);
+              return true;
+            }
+            
+            console.log('❌ Origin not allowed:', origin);
+            return false;
           }
           
-          return true; // Allow all in development
+          // Development - allow all
+          console.log('✅ Development mode - allowing all connections');
+          return true;
         }
       });
 
@@ -44,12 +83,20 @@ class BookingWebSocketServer {
       this.wss.on('connection', (ws, req) => {
         const clientId = `client_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         
+        // Extract more connection info
+        const clientInfo = {
+          ip: req.connection.remoteAddress || req.socket.remoteAddress,
+          userAgent: req.headers['user-agent'],
+          origin: req.headers.origin,
+          forwarded: req.headers['x-forwarded-for'],
+          realIp: req.headers['x-real-ip'],
+        };
+        
         // Log connection details
         console.log('📱 New WebSocket connection:', {
           clientId,
-          origin: req.headers.origin,
-          userAgent: req.headers['user-agent'],
-          ip: req.connection.remoteAddress || req.socket.remoteAddress
+          ...clientInfo,
+          timestamp: new Date().toISOString()
         });
         
         this.clients.set(clientId, {
@@ -57,7 +104,9 @@ class BookingWebSocketServer {
           ws: ws,
           type: 'unknown',
           connectedAt: new Date(),
-          ip: req.connection.remoteAddress || req.socket.remoteAddress
+          ...clientInfo,
+          lastPing: new Date(),
+          isAlive: true
         });
 
         console.log(`📱 Client connected: ${clientId} (Total: ${this.clients.size})`);
@@ -83,18 +132,33 @@ class BookingWebSocketServer {
             const message = JSON.parse(data.toString());
             console.log(`📥 Message from ${clientId}:`, message.type);
             this.handleMessage(clientId, message);
+            
+            // Update last activity
+            const client = this.clients.get(clientId);
+            if (client) {
+              client.lastPing = new Date();
+              client.isAlive = true;
+            }
           } catch (error) {
             console.error('❌ Message parse error:', error);
-            ws.send(JSON.stringify({
-              type: 'error',
-              message: 'Invalid message format'
-            }));
+            try {
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Invalid message format'
+              }));
+            } catch (sendError) {
+              console.error('❌ Failed to send error response:', sendError);
+            }
           }
         });
 
         // Handle disconnect
         ws.on('close', (code, reason) => {
-          console.log(`📵 Client disconnected: ${clientId} (Code: ${code}, Reason: ${reason})`);
+          console.log(`📵 Client disconnected: ${clientId}`, {
+            code, 
+            reason: reason.toString(),
+            timestamp: new Date().toISOString()
+          });
           this.clients.delete(clientId);
           console.log(`📊 Remaining connections: ${this.clients.size}`);
         });
@@ -105,32 +169,78 @@ class BookingWebSocketServer {
           this.clients.delete(clientId);
         });
 
-        // Send ping every 30 seconds to keep connection alive
+        // Handle pong responses (keep connection alive)
+        ws.on('pong', () => {
+          console.log(`🏓 Pong received from ${clientId}`);
+          const client = this.clients.get(clientId);
+          if (client) {
+            client.isAlive = true;
+            client.lastPing = new Date();
+          }
+        });
+
+        // FIXED: Improved heartbeat mechanism
         const pingInterval = setInterval(() => {
+          const client = this.clients.get(clientId);
+          if (!client) {
+            clearInterval(pingInterval);
+            return;
+          }
+
           if (ws.readyState === WebSocket.OPEN) {
             try {
+              // Check if client responded to last ping
+              const timeSinceLastPing = Date.now() - client.lastPing.getTime();
+              if (timeSinceLastPing > 60000) { // 60 seconds without response
+                console.warn(`⚠️ Client ${clientId} appears unresponsive, closing connection`);
+                ws.terminate();
+                clearInterval(pingInterval);
+                return;
+              }
+
+              // Send ping
+              client.isAlive = false;
               ws.ping();
             } catch (error) {
               console.error('❌ Ping error:', error);
               clearInterval(pingInterval);
+              this.clients.delete(clientId);
             }
           } else {
+            console.log(`📵 Client ${clientId} connection not open, clearing ping interval`);
             clearInterval(pingInterval);
+            this.clients.delete(clientId);
           }
-        }, 30000);
-
-        // Handle pong responses
-        ws.on('pong', () => {
-          console.log(`🏓 Pong received from ${clientId}`);
-        });
+        }, 30000); // Ping every 30 seconds
       });
 
       console.log('✅ WebSocket server initialized successfully on path: /websocket');
       console.log(`📊 Server ready to accept connections`);
       
+      // FIXED: Add periodic cleanup for dead connections
+      setInterval(() => {
+        this.cleanupDeadConnections();
+      }, 60000); // Cleanup every minute
+      
     } catch (error) {
       console.error('❌ WebSocket initialization error:', error);
       throw error;
+    }
+  }
+
+  // FIXED: Add method to clean up dead connections
+  cleanupDeadConnections() {
+    let cleanedUp = 0;
+    this.clients.forEach((client, clientId) => {
+      if (client.ws.readyState !== WebSocket.OPEN) {
+        console.log(`🧹 Cleaning up dead connection: ${clientId}`);
+        this.clients.delete(clientId);
+        cleanedUp++;
+      }
+    });
+    
+    if (cleanedUp > 0) {
+      console.log(`🧹 Cleaned up ${cleanedUp} dead connections. Active: ${this.clients.size}`);
     }
   }
 
@@ -140,6 +250,9 @@ class BookingWebSocketServer {
       console.warn(`⚠️ Message from unknown client: ${clientId}`);
       return;
     }
+
+    // Update client activity
+    client.lastPing = new Date();
 
     switch (message.type) {
       case 'identify':
@@ -204,8 +317,9 @@ class BookingWebSocketServer {
   broadcastToType(clientType, message) {
     let sentCount = 0;
     let totalTargets = 0;
+    let failedClients = [];
     
-    this.clients.forEach((client) => {
+    this.clients.forEach((client, clientId) => {
       if (client.type === clientType) {
         totalTargets++;
         if (client.ws.readyState === WebSocket.OPEN) {
@@ -215,25 +329,30 @@ class BookingWebSocketServer {
               timestamp: new Date().toISOString()
             }));
             sentCount++;
+            console.log(`📤 Message sent to ${clientType} client: ${clientId}`);
           } catch (error) {
-            console.error(`❌ Send error to ${client.id}:`, error);
-            // Remove dead connections
-            this.clients.delete(client.id);
+            console.error(`❌ Send error to ${clientId}:`, error);
+            failedClients.push(clientId);
           }
         } else {
-          console.warn(`⚠️ Client ${client.id} connection not open (state: ${client.ws.readyState})`);
-          // Clean up dead connections
-          this.clients.delete(client.id);
+          console.warn(`⚠️ Client ${clientId} connection not open (state: ${client.ws.readyState})`);
+          failedClients.push(clientId);
         }
       }
     });
 
+    // Clean up failed clients
+    failedClients.forEach(clientId => {
+      console.log(`🧹 Removing failed client: ${clientId}`);
+      this.clients.delete(clientId);
+    });
+
     console.log(`📢 Broadcasted to ${sentCount}/${totalTargets} ${clientType} clients`);
-    return { sent: sentCount, total: totalTargets };
+    return { sent: sentCount, total: totalTargets, failed: failedClients.length };
   }
 
   emitNewBooking(bookingData) {
-    console.log('🔔 Emitting new booking:', bookingData.bookingId || bookingData._id);
+    console.log('🔔 Emitting new booking notification:', bookingData.bookingId || bookingData._id);
     
     const message = {
       type: 'new_booking',
@@ -246,7 +365,9 @@ class BookingWebSocketServer {
       }
     };
 
-    return this.broadcastToType('admin', message);
+    const result = this.broadcastToType('admin', message);
+    console.log(`🔔 New booking broadcast result:`, result);
+    return result;
   }
 
   emitBookingStatusUpdate(bookingId, oldStatus, newStatus, bookingData = {}) {
@@ -263,11 +384,13 @@ class BookingWebSocketServer {
       }
     };
 
-    return this.broadcastToType('admin', message);
+    const result = this.broadcastToType('admin', message);
+    console.log(`🔄 Status update broadcast result:`, result);
+    return result;
   }
 
   emitBookingDeletion(bookingId, bookingData = {}) {
-    console.log(`🗑️ Emitting deletion: ${bookingId}`);
+    console.log(`🗑️ Emitting deletion notification: ${bookingId}`);
     
     const message = {
       type: 'booking_deleted',
@@ -278,7 +401,9 @@ class BookingWebSocketServer {
       }
     };
 
-    return this.broadcastToType('admin', message);
+    const result = this.broadcastToType('admin', message);
+    console.log(`🗑️ Deletion broadcast result:`, result);
+    return result;
   }
 
   getStats() {
@@ -296,7 +421,11 @@ class BookingWebSocketServer {
         type: client.type,
         connectedAt: client.connectedAt,
         ip: client.ip,
-        state: client.ws.readyState
+        realIp: client.realIp,
+        origin: client.origin,
+        state: client.ws.readyState,
+        isAlive: client.isAlive,
+        lastPing: client.lastPing
       };
       
       stats.connections.push(clientInfo);
@@ -331,6 +460,7 @@ class BookingWebSocketServer {
     return stats;
   }
 
+  // FIXED: Enhanced close method
   close() {
     console.log('🔌 Closing WebSocket server...');
     
