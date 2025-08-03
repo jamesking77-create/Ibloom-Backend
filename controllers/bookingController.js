@@ -1173,7 +1173,7 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
     ? `
       <div style="background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 15px; margin-top: 15px;">
         <p style="margin: 0; color: #92400E; font-weight: bold;">📦 Important Note:</p>
-        <p style="margin: 5px 0 0 0; color: #92400E; font-size: 14px;">Delivery and setup prices will be added and negotiated separately based on location and requirements.</p>
+        <p style="margin: 5px 0 0 0; color: #92400E; font-size: 14px;">Delivery and setup prices will be added and negotiated separately, if selected by you based on location and requirements.</p>
       </div>
     `
     : "";
@@ -1339,7 +1339,7 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
           }
           <li style="margin-bottom: 8px;">Please quote the invoice number when making payment</li>
           <li style="margin-bottom: 8px;">Contact us immediately if you have any questions</li>
-          <li style="margin-bottom: 8px;"><strong>Delivery and setup prices will be added and negotiated separately</strong></li>
+          <li style="margin-bottom: 8px;"><strong>Delivery and setup prices will be added and negotiated separately if selected.</strong></li>
         </ul>
       </div>
 
