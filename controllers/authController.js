@@ -8,9 +8,25 @@ const { generateToken } = require("../utils/jwtUtils");
 
 // Register a new user
 exports.register = async (req, res) => {
-  const { username, email, password } = req.body;
-
   try {
+    // Debug logging
+    console.log('Register request received:', {
+      body: req.body,
+      contentType: req.get('Content-Type'),
+      method: req.method
+    });
+
+    // Check if req.body exists
+    if (!req.body || typeof req.body !== 'object') {
+      console.error('Request body is missing or invalid:', req.body);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request body. Please ensure you're sending JSON data with Content-Type: application/json",
+      });
+    }
+
+    const { username, email, password } = req.body;
+
     // Input validation
     if (!username || !email || !password) {
       return res.status(400).json({
@@ -72,10 +88,29 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
-  const bcrypt = require('bcryptjs');
-
   try {
+    // Debug logging
+    console.log('Login request received:', {
+      body: req.body,
+      contentType: req.get('Content-Type'),
+      method: req.method,
+      headers: {
+        'content-type': req.get('Content-Type'),
+        'content-length': req.get('Content-Length')
+      }
+    });
+
+    // Check if req.body exists
+    if (!req.body || typeof req.body !== 'object') {
+      console.error('Request body is missing or invalid:', req.body);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request body. Please ensure you're sending JSON data with Content-Type: application/json",
+      });
+    }
+
+    const { email, password } = req.body;
+
     // Input validation
     if (!email || !password) {
       return res.status(400).json({
@@ -143,9 +178,17 @@ exports.getMe = async (req, res) => {
 
 // Forgot password
 exports.forgotPassword = async (req, res) => {
-  const { email } = req.body;
-
   try {
+    // Check if req.body exists
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request body. Please ensure you're sending JSON data with Content-Type: application/json",
+      });
+    }
+
+    const { email } = req.body;
+
     // Input validation
     if (!email) {
       return res.status(400).json({
@@ -201,10 +244,18 @@ exports.forgotPassword = async (req, res) => {
 
 // Reset password
 exports.resetPassword = async (req, res) => {
-  const { password, confirmPassword } = req.body;
-  const resetPasswordToken = req.params.token;
-
   try {
+    // Check if req.body exists
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request body. Please ensure you're sending JSON data with Content-Type: application/json",
+      });
+    }
+
+    const { password, confirmPassword } = req.body;
+    const resetPasswordToken = req.params.token;
+
     // Input validation
     if (!password || !confirmPassword) {
       return res.status(400).json({
@@ -256,7 +307,7 @@ exports.resetPassword = async (req, res) => {
     console.error("Reset password error:", {
       error: err.message,
       stack: err.stack,
-      resetPasswordToken,
+      resetPasswordToken: req.params.token,
     });
     res.status(500).json({
       success: false,
