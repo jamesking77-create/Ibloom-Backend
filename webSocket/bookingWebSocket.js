@@ -13,7 +13,7 @@ class BookingWebSocketServer {
     try {
       this.wss = new WebSocket.Server({ 
         server,
-        path: '/ws/bookings',
+        path: '/websocket',
         // Add CORS support
         verifyClient: (info) => {
           // Allow all origins in production, or specify your frontend URL
@@ -125,7 +125,7 @@ class BookingWebSocketServer {
         });
       });
 
-      console.log('✅ WebSocket server initialized successfully on path: /ws/bookings');
+      console.log('✅ WebSocket server initialized successfully on path: /websocket');
       console.log(`📊 Server ready to accept connections`);
       
     } catch (error) {
