@@ -1,4 +1,4 @@
-// index.js - SAFE VERSION with fixed wildcard route
+// index.js - FIXED VERSION with body parsing middleware
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -21,7 +21,11 @@ app.use(cors({
       ].filter(Boolean) // Remove any undefined values
     : ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'],
   credentials: true
-}));;
+}));
+
+// 🔧 FIX: Add missing body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check route
 app.get("/health", (req, res) => {
