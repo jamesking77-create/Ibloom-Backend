@@ -102,7 +102,7 @@ server.listen(PORT, HOST, () => {
   try {
     console.log("🔌 Initializing WebSocket server...");
     bookingWebSocketServer.initialize(server);
-    console.log(`✅ WebSocket server initialized at: ws://${HOST}:${PORT}/ws/bookings`);
+    console.log(`✅ WebSocket server initialized at: ws://${HOST}:${PORT}/websocket`);
   } catch (error) {
     console.error('❌ Failed to initialize WebSocket server:', error);
     console.error('Error details:', error.message);
