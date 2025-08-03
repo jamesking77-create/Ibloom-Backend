@@ -4,6 +4,9 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 
+// Import WebSocket server
+const bookingWebSocketServer = require("../webSocket/bookingWebSocket");
+
 // Email configuration
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -161,7 +164,7 @@ const getBookings = async (req, res) => {
   }
 };
 
-// Create a new booking
+// Create a new booking - UPDATED with WebSocket notification
 const createBooking = async (req, res) => {
   try {
     console.log(
@@ -247,6 +250,15 @@ const createBooking = async (req, res) => {
 
     console.log("Booking created successfully:", booking._id);
 
+    // 🔔 EMIT WEBSOCKET NOTIFICATION FOR NEW BOOKING
+    try {
+      bookingWebSocketServer.emitNewBooking(booking);
+      console.log("✅ WebSocket notification sent for new booking:", booking.bookingId);
+    } catch (wsError) {
+      console.error("❌ Failed to send WebSocket notification:", wsError);
+      // Don't fail the request if WebSocket fails
+    }
+
     // Send emails in parallel (don't block the response)
     const emailPromises = [
       sendBookingConfirmationEmail(booking),
@@ -288,7 +300,7 @@ const getBookingById = async (req, res) => {
   }
 };
 
-// Update booking status
+// Update booking status - UPDATED with WebSocket notification
 const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -313,6 +325,20 @@ const updateBookingStatus = async (req, res) => {
     console.log(
       `Booking ${booking.bookingId} status updated from ${oldStatus} to ${status}`
     );
+
+    // 🔔 EMIT WEBSOCKET NOTIFICATION FOR STATUS UPDATE
+    try {
+      bookingWebSocketServer.emitBookingStatusUpdate(
+        booking._id, 
+        oldStatus, 
+        status, 
+        booking
+      );
+      console.log("✅ WebSocket notification sent for status update:", booking.bookingId);
+    } catch (wsError) {
+      console.error("❌ Failed to send WebSocket notification:", wsError);
+      // Don't fail the request if WebSocket fails
+    }
 
     // Send status update email to customer (background)
     sendStatusUpdateEmail(booking, oldStatus, status).catch((emailError) => {
@@ -542,7 +568,7 @@ const sendInvoiceByEmail = async (req, res) => {
   }
 };
 
-// Delete booking
+// Delete booking - UPDATED with WebSocket notification
 const deleteBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -562,6 +588,15 @@ const deleteBooking = async (req, res) => {
     await Booking.findByIdAndDelete(req.params.id);
 
     console.log(`Booking ${bookingInfo.bookingId} deleted successfully`);
+
+    // 🔔 EMIT WEBSOCKET NOTIFICATION FOR BOOKING DELETION
+    try {
+      bookingWebSocketServer.emitBookingDeletion(booking._id, bookingInfo);
+      console.log("✅ WebSocket notification sent for booking deletion:", bookingInfo.bookingId);
+    } catch (wsError) {
+      console.error("❌ Failed to send WebSocket notification:", wsError);
+      // Don't fail the request if WebSocket fails
+    }
 
     // Optionally send cancellation email to customer
     if (bookingInfo.customerEmail) {
