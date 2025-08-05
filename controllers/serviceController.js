@@ -67,7 +67,7 @@ const updateCategory = async (req, res) => {
 
     // Parse request body data
     let { name, image, description, itemCount, hasQuotes, items } = req.body;
-    console.log("body",req.body);
+    console.log("body", req.body);
 
     // Parse JSON strings if they exist
     try {
@@ -90,16 +90,33 @@ const updateCategory = async (req, res) => {
     }
     updateData.hasQuotes = hasQuotes;
 
-    // Handle image upload if file is present
+    // Handle image upload if file is present - ENHANCED VERSION
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "categories",
       });
-      updateData.image = result.secure_url;
+      
+      // Check if this upload is for an item (when items are being updated with a file)
+      if (items && Array.isArray(items)) {
+        // Find the item that needs the uploaded image (marked with _needsUploadedImage)
+        const updatedItems = items.map((item) => {
+          if (item._needsUploadedImage) {
+            const { _needsUploadedImage, ...itemWithoutMarker } = item;
+            return { ...itemWithoutMarker, image: result.secure_url };
+          }
+          return item;
+        });
+        updateData.items = updatedItems;
+        updateData.itemCount = updatedItems.length;
+      } else {
+        // This is a category image upload
+        updateData.image = result.secure_url;
+      }
 
       // Delete temp file from server
       fs.unlinkSync(req.file.path);
     }
+
     // Update category
     const updatedCategory = await Category.findOneAndUpdate(
       { id: categoryId },
@@ -197,17 +214,15 @@ const createCategory = async (req, res) => {
       itemCount: Array.isArray(items) ? items.length : itemCount,
     };
 
- 
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "categories",
       });
       categoryData.image = result.secure_url;
 
-   
       fs.unlinkSync(req.file.path);
     } else if (image) {
-      categoryData.image = image; 
+      categoryData.image = image;
     }
 
     // Create new category
