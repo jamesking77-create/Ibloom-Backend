@@ -10,11 +10,13 @@ const {
   updateBookingItems,
   generateInvoice,
   sendInvoiceByEmail,
+  getBookingEmails,
   deleteBooking
 } = require('../controllers/bookingController');
 
 router.get('/', getBookings);
 router.post('/', createBooking);
+router.get('/emails', getBookingEmails);
 router.get('/:id', getBookingById);
 router.patch('/:id/status', updateBookingStatus);
 router.patch('/:id/payment', updateBookingPayment);

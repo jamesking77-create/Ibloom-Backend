@@ -1723,11 +1723,110 @@ const sendInvoiceEmail = async (booking, invoiceData) => {
   console.log(`Invoice email sent to: ${customerEmail}`);
 };
 
+// Add this function to your bookingController.js
+
+const getBookingEmails = async (req, res) => {
+  try {
+    console.log('Fetching booking emails for mailer...');
+
+    // Fetch all bookings with only the fields needed for emails
+    const bookings = await Booking.find({
+      // Optional: filter by status if you only want certain bookings
+      // status: { $in: ['confirmed', 'pending', 'pending_confirmation'] }
+    })
+    .select('_id bookingId customerName email eventType customer eventSchedule status createdAt')
+    .sort({ createdAt: -1 }) // Sort by newest first
+    .lean(); // Use lean for better performance
+
+    console.log(`Found ${bookings.length} bookings for mailer`);
+
+    // Transform the data to match your frontend sampleMails format
+    const emailData = bookings.map((booking) => {
+      // Handle both old and new data structures
+      const customerName = booking.customerName || 
+                          booking.customer?.personalInfo?.name || 
+                          'Unknown Customer';
+      
+      const email = booking.email || 
+                   booking.customer?.personalInfo?.email || 
+                   'no-email@example.com';
+      
+      const eventType = booking.eventType || 
+                       booking.customer?.eventDetails?.eventType || 
+                       'General Event';
+      
+      // Use event start date as bookingDate (more relevant for mailer)
+      const bookingDate = booking.eventSchedule?.startDate || 
+                         booking.createdAt.toISOString().split('T')[0];
+      
+      const status = booking.status === 'pending_confirmation' ? 'pending' : booking.status;
+
+      return {
+        id: booking._id,
+        customerName,
+        email,
+        eventType,
+        bookingDate,
+        status: status || 'pending',
+      };
+    });
+
+    // Filter out any entries with invalid emails
+    const validEmailData = emailData.filter(item => 
+      item.email && 
+      item.email !== 'no-email@example.com' && 
+      item.email.includes('@')
+    );
+
+    // Calculate some basic stats for the mailer dashboard
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const thisWeekBookings = bookings.filter(
+      (b) => new Date(b.createdAt) >= oneWeekAgo
+    );
+    const thisMonthBookings = bookings.filter(
+      (b) => new Date(b.createdAt) >= oneMonthAgo
+    );
+
+    const stats = {
+      totalRecipients: validEmailData.length,
+      emailsSentToday: 0, 
+      emailsSentThisMonth: 0, 
+      lastEmailSent: null, 
+      thisWeekBookings: thisWeekBookings.length,
+      thisMonthBookings: thisMonthBookings.length,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking emails fetched successfully',
+      data: {
+        email: validEmailData, // Note: your Redux slice expects 'email' property
+        stats: stats
+      },
+      count: validEmailData.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching booking emails:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch booking emails',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
 module.exports = {
   getBookings,
   createBooking,
   getBookingById,
   updateBookingStatus,
+  getBookingEmails,
   updateBookingPayment,
   updateBookingItems,
   generateInvoice,
