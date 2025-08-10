@@ -1,4 +1,4 @@
-// index.js - FIXED VERSION with body parsing middleware
+// index.js - UPDATED VERSION with Quote Routes and WebSocket Integration
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -23,9 +23,33 @@ app.use(cors({
   credentials: true
 }));
 
-// 🔧 FIX: Add missing body parsing middleware
+// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 🔧 NEW: Make WebSocket server available globally for quotes
+// This allows your quote controller to send WebSocket notifications
+app.use((req, res, next) => {
+  req.wss = bookingWebSocketServer; // Attach WebSocket server to request
+  next();
+});
+
+// 🔧 NEW: Global WebSocket helper for quote notifications
+global.emitQuoteNotification = (eventType, data) => {
+  try {
+    if (bookingWebSocketServer && bookingWebSocketServer.broadcast) {
+      bookingWebSocketServer.broadcast({
+        type: eventType,
+        module: 'quotes', // 🔧 Distinguish from booking events
+        data: data,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`📡 Quote WebSocket notification sent: ${eventType}`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to send quote WebSocket notification:', error);
+  }
+};
 
 // Health check route
 app.get("/health", (req, res) => {
@@ -35,6 +59,10 @@ app.get("/health", (req, res) => {
     websocket: {
       initialized: !!bookingWebSocketServer.wss,
       stats: bookingWebSocketServer.getStats()
+    },
+    quotes: {
+      enabled: true,
+      websocketIntegration: true
     }
   });
 });
@@ -46,6 +74,7 @@ const userRoutes = require("./routes/userRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
+const quoteRoutes = require("./routes/quoteRoutes"); // 🔧 Quote routes
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
@@ -53,14 +82,19 @@ app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/mailer", mailRoutes);
+app.use("/api/quotes", quoteRoutes); // 🔧 Quote endpoints
 
-// WebSocket stats endpoint
+// WebSocket stats endpoint (Enhanced for quotes)
 app.get("/api/websocket/stats", (req, res) => {
   try {
     const stats = bookingWebSocketServer.getStats();
     res.status(200).json({
       success: true,
-      stats,
+      stats: {
+        ...stats,
+        supportedModules: ['bookings', 'quotes'], // 🔧 Show supported modules
+        quoteNotifications: true
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -68,6 +102,26 @@ app.get("/api/websocket/stats", (req, res) => {
       success: false,
       error: error.message,
       timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// 🔧 NEW: Quote WebSocket test endpoint (for debugging)
+app.post("/api/quotes/test-websocket", (req, res) => {
+  try {
+    global.emitQuoteNotification('test_quote_notification', {
+      message: 'WebSocket test for quotes',
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Quote WebSocket test notification sent'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -81,7 +135,7 @@ app.use((error, req, res, next) => {
   });
 });
 
-// 🔧 FIXED: Safer 404 handler - removed problematic wildcard
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     message: 'Route not found',
@@ -98,11 +152,14 @@ server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on ${HOST}:${PORT}`);
   console.log(`📍 Health check available at: http://${HOST}:${PORT}/health`);
   console.log(`📊 WebSocket stats available at: http://${HOST}:${PORT}/api/websocket/stats`);
+  console.log(`📝 Quote endpoints available at: http://${HOST}:${PORT}/api/quotes`); // 🔧 Quote endpoints
+  console.log(`🧪 Quote WebSocket test: POST http://${HOST}:${PORT}/api/quotes/test-websocket`); // 🔧 Test endpoint
   
   try {
     console.log("🔌 Initializing WebSocket server...");
     bookingWebSocketServer.initialize(server);
     console.log(`✅ WebSocket server initialized at: ws://${HOST}:${PORT}/websocket`);
+    console.log(`📡 WebSocket supports: bookings, quotes`); // 🔧 Show supported modules
   } catch (error) {
     console.error('❌ Failed to initialize WebSocket server:', error);
     console.error('Error details:', error.message);
