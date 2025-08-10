@@ -95,7 +95,7 @@ const sendPasswordResetEmail = async (email, resetToken) => {
   });
 };
 
-// FIXED: Function to send individual emails with proper attachment handling
+//Function to send indvividual emails
 const sendIndividualEmail = async ({
   to,
   subject,
@@ -103,94 +103,38 @@ const sendIndividualEmail = async ({
   customerName,
   attachments = [],
 }) => {
-  console.log("=== EMAIL SERVICE DEBUG ===");
-  console.log("Recipient:", to);
-  console.log("Attachments received:", attachments.length);
-  
-  // Debug each attachment
-  attachments.forEach((attachment, index) => {
-    console.log(`Attachment ${index + 1}:`, {
-      filename: attachment.filename,
-      contentType: attachment.contentType,
-      encoding: attachment.encoding,
-      contentLength: attachment.content ? attachment.content.length : 0,
-      size: attachment.size,
-      hasContent: !!attachment.content,
-      contentPreview: attachment.content ? attachment.content.substring(0, 50) + '...' : 'NO CONTENT'
-    });
-  });
-
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to,
     subject,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-          <h2 style="color: #333333; margin-bottom: 20px;">Hello ${customerName || "Valued Customer"},</h2>
-          <div style="color: #666666; line-height: 1.6; margin-bottom: 20px;">
-            ${message.replace(/\n/g, '<br>')}
-          </div>
-          ${attachments.length > 0 ? `
-            <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
-              <p style="color: #666; font-size: 14px; margin: 0;">
-                📎 This email contains ${attachments.length} attachment${attachments.length > 1 ? 's' : ''}
-              </p>
-            </div>
-          ` : ''}
-          <br />
-          <p style="color: #999999; font-size: 12px; margin-top: 30px;">
-            Sent via Ibloom Email Service
-          </p>
-        </div>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <p>Hello ${customerName || ""},</p>
+        <div>${message}</div>
+        <br />
+        <p style="color: gray; font-size: 12px;">Sent via Ibloom Email Service</p>
       </div>
     `,
-    // CRITICAL FIX: Properly format attachments for nodemailer
-    attachments: attachments.map((attachment, index) => {
-      // Validate attachment before processing
-      if (!attachment.content) {
-        console.error(`❌ Attachment ${attachment.filename} has no content!`);
-        return null;
-      }
-
-      console.log(`📎 Processing attachment ${index + 1}: ${attachment.filename}`);
-      
-      // Return properly formatted attachment for nodemailer
-      return {
-        filename: attachment.filename,        // ✅ Use 'filename' not 'name'
-        content: attachment.content,          // ✅ Use base64 'content' not 'path'
-        encoding: attachment.encoding || 'base64', // ✅ Specify encoding
-        contentType: attachment.contentType,  // ✅ Use 'contentType' not 'type'
-        // Optional: Add Content-ID for inline images
-        ...(attachment.contentType && attachment.contentType.startsWith('image/') && {
-          cid: attachment.cid || `image_${index}`
-        })
-      };
-    }).filter(Boolean), // Remove null attachments
+    attachments: attachments.map((att) => ({
+      filename: att.name,
+      path: att.url,
+      contentType: att.type,
+    })),
   };
-
-  console.log("📧 Final mail options:", {
-    to: mailOptions.to,
-    subject: mailOptions.subject,
-    attachmentCount: mailOptions.attachments.length,
-    attachmentNames: mailOptions.attachments.map(a => a.filename)
-  });
 
   return new Promise((resolve, reject) => {
     transporter.sendMail(mailOptions, (err, info) => {
       if (err) {
-        console.error("❌ Error sending individual email:", {
+        console.error("Error sending individual email:", {
           error: err.message,
           to,
-          attachmentCount: attachments.length
         });
         reject(err);
       } else {
-        console.log("✅ Individual email sent:", {
+        console.log("Individual email sent:", {
           to,
           messageId: info.messageId,
           response: info.response,
-          attachmentsSent: mailOptions.attachments.length
         });
         resolve(info);
       }
