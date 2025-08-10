@@ -22,34 +22,48 @@ const ADMIN_EMAILS = [process.env.ADMIN_EMAIL || "admin@youreventcompany.com"];
 // FIXED: Helper function to get logo - supports both URL and local paths
 const getLogoBase64 = async () => {
   // Option 1: Try Cloudinary URL first (RECOMMENDED)
-  const CLOUDINARY_LOGO_URL = process.env.CLOUDINARY_LOGO_URL || "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/ibloomcut.png";
-  
+  const CLOUDINARY_LOGO_URL =
+    process.env.CLOUDINARY_LOGO_URL ||
+    "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/ibloomcut.png";
+
   try {
     if (CLOUDINARY_LOGO_URL && CLOUDINARY_LOGO_URL.startsWith("http")) {
-      console.log("Trying to load logo from Cloudinary URL:", CLOUDINARY_LOGO_URL);
-      const https = require('https');
-      const http = require('http');
-      
+      console.log(
+        "Trying to load logo from Cloudinary URL:",
+        CLOUDINARY_LOGO_URL
+      );
+      const https = require("https");
+      const http = require("http");
+
       return new Promise((resolve, reject) => {
-        const client = CLOUDINARY_LOGO_URL.startsWith('https:') ? https : http;
-        
-        client.get(CLOUDINARY_LOGO_URL, (response) => {
-          if (response.statusCode === 200) {
-            const data = [];
-            response.on('data', chunk => data.push(chunk));
-            response.on('end', () => {
-              const buffer = Buffer.concat(data);
-              console.log("Logo loaded successfully from Cloudinary, size:", buffer.length, "bytes");
-              resolve(`data:image/png;base64,${buffer.toString("base64")}`);
-            });
-          } else {
-            console.log("Failed to load from Cloudinary, status:", response.statusCode);
+        const client = CLOUDINARY_LOGO_URL.startsWith("https:") ? https : http;
+
+        client
+          .get(CLOUDINARY_LOGO_URL, (response) => {
+            if (response.statusCode === 200) {
+              const data = [];
+              response.on("data", (chunk) => data.push(chunk));
+              response.on("end", () => {
+                const buffer = Buffer.concat(data);
+                console.log(
+                  "Logo loaded successfully from Cloudinary, size:",
+                  buffer.length,
+                  "bytes"
+                );
+                resolve(`data:image/png;base64,${buffer.toString("base64")}`);
+              });
+            } else {
+              console.log(
+                "Failed to load from Cloudinary, status:",
+                response.statusCode
+              );
+              resolve(tryLocalLogoPaths()); // Fallback to local
+            }
+          })
+          .on("error", (error) => {
+            console.error("Error loading from Cloudinary:", error);
             resolve(tryLocalLogoPaths()); // Fallback to local
-          }
-        }).on('error', (error) => {
-          console.error("Error loading from Cloudinary:", error);
-          resolve(tryLocalLogoPaths()); // Fallback to local
-        });
+          });
       });
     }
   } catch (error) {
@@ -68,7 +82,7 @@ const tryLocalLogoPaths = () => {
     path.join(__dirname, "../../public/assets/ibloomcut.png"),
     path.join(__dirname, "../public/assets/ibloomcut.png"),
     path.join(process.cwd(), "assets/ibloomcut.png"),
-    path.join(process.cwd(), "public/assets/ibloomcut.png")
+    path.join(process.cwd(), "public/assets/ibloomcut.png"),
   ];
 
   for (const logoPath of possiblePaths) {
@@ -78,7 +92,11 @@ const tryLocalLogoPaths = () => {
 
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath);
-        console.log("Logo loaded successfully from local path, size:", logoBuffer.length, "bytes");
+        console.log(
+          "Logo loaded successfully from local path, size:",
+          logoBuffer.length,
+          "bytes"
+        );
         return `data:image/png;base64,${logoBuffer.toString("base64")}`;
       }
     } catch (error) {
@@ -253,7 +271,10 @@ const createBooking = async (req, res) => {
     // 🔔 EMIT WEBSOCKET NOTIFICATION FOR NEW BOOKING
     try {
       bookingWebSocketServer.emitNewBooking(booking);
-      console.log("✅ WebSocket notification sent for new booking:", booking.bookingId);
+      console.log(
+        "✅ WebSocket notification sent for new booking:",
+        booking.bookingId
+      );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
       // Don't fail the request if WebSocket fails
@@ -329,12 +350,15 @@ const updateBookingStatus = async (req, res) => {
     // 🔔 EMIT WEBSOCKET NOTIFICATION FOR STATUS UPDATE
     try {
       bookingWebSocketServer.emitBookingStatusUpdate(
-        booking._id, 
-        oldStatus, 
-        status, 
+        booking._id,
+        oldStatus,
+        status,
         booking
       );
-      console.log("✅ WebSocket notification sent for status update:", booking.bookingId);
+      console.log(
+        "✅ WebSocket notification sent for status update:",
+        booking.bookingId
+      );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
       // Don't fail the request if WebSocket fails
@@ -592,7 +616,10 @@ const deleteBooking = async (req, res) => {
     // 🔔 EMIT WEBSOCKET NOTIFICATION FOR BOOKING DELETION
     try {
       bookingWebSocketServer.emitBookingDeletion(booking._id, bookingInfo);
-      console.log("✅ WebSocket notification sent for booking deletion:", bookingInfo.bookingId);
+      console.log(
+        "✅ WebSocket notification sent for booking deletion:",
+        bookingInfo.bookingId
+      );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
       // Don't fail the request if WebSocket fails
@@ -679,58 +706,77 @@ const generatePDFContent = async (doc, invoiceData) => {
 
   // FIXED: Company logo with URL support - fetch image for PDF use
   const logoOptions = {
-    cloudinaryUrl: process.env.CLOUDINARY_LOGO_URL || "https://res.cloudinary.com/dc7jgb30v/image/upload/v1754220509/ibloomcut_mlsrwt.png",
+    cloudinaryUrl:
+      process.env.CLOUDINARY_LOGO_URL ||
+      "https://res.cloudinary.com/dc7jgb30v/image/upload/v1754220509/ibloomcut_mlsrwt.png",
     localPaths: [
       path.join(__dirname, "../../assets/ibloomcut.png"),
       path.join(__dirname, "../assets/ibloomcut.png"),
       path.join(__dirname, "../../public/assets/ibloomcut.png"),
       path.join(__dirname, "../public/assets/ibloomcut.png"),
       path.join(process.cwd(), "assets/ibloomcut.png"),
-      path.join(process.cwd(), "public/assets/ibloomcut.png")
-    ]
+      path.join(process.cwd(), "public/assets/ibloomcut.png"),
+    ],
   };
 
   let logoAdded = false;
 
   // Try Cloudinary URL first - fetch the image as buffer for PDF
-  if (logoOptions.cloudinaryUrl && logoOptions.cloudinaryUrl.startsWith("http")) {
+  if (
+    logoOptions.cloudinaryUrl &&
+    logoOptions.cloudinaryUrl.startsWith("http")
+  ) {
     try {
-      console.log("Fetching logo from Cloudinary for PDF:", logoOptions.cloudinaryUrl);
-      const https = require('https');
-      const http = require('http');
-      
+      console.log(
+        "Fetching logo from Cloudinary for PDF:",
+        logoOptions.cloudinaryUrl
+      );
+      const https = require("https");
+      const http = require("http");
+
       await new Promise((resolve, reject) => {
-        const client = logoOptions.cloudinaryUrl.startsWith('https:') ? https : http;
-        
-        client.get(logoOptions.cloudinaryUrl, (response) => {
-          if (response.statusCode === 200) {
-            const data = [];
-            response.on('data', chunk => data.push(chunk));
-            response.on('end', () => {
-              try {
-                const logoBuffer = Buffer.concat(data);
-                doc.image(logoBuffer, pageWidth - 110, headerY + 40, {
-                  width: 60,
-                  height: 60,
-                  fit: [60, 60],
-                  align: "center",
-                });
-                logoAdded = true;
-                console.log("Logo added to PDF from Cloudinary buffer, size:", logoBuffer.length, "bytes");
-                resolve();
-              } catch (error) {
-                console.error("Error adding logo buffer to PDF:", error);
-                resolve(); // Continue to fallback
-              }
-            });
-          } else {
-            console.log("Failed to fetch logo from Cloudinary, status:", response.statusCode);
+        const client = logoOptions.cloudinaryUrl.startsWith("https:")
+          ? https
+          : http;
+
+        client
+          .get(logoOptions.cloudinaryUrl, (response) => {
+            if (response.statusCode === 200) {
+              const data = [];
+              response.on("data", (chunk) => data.push(chunk));
+              response.on("end", () => {
+                try {
+                  const logoBuffer = Buffer.concat(data);
+                  doc.image(logoBuffer, pageWidth - 110, headerY + 40, {
+                    width: 60,
+                    height: 60,
+                    fit: [60, 60],
+                    align: "center",
+                  });
+                  logoAdded = true;
+                  console.log(
+                    "Logo added to PDF from Cloudinary buffer, size:",
+                    logoBuffer.length,
+                    "bytes"
+                  );
+                  resolve();
+                } catch (error) {
+                  console.error("Error adding logo buffer to PDF:", error);
+                  resolve(); // Continue to fallback
+                }
+              });
+            } else {
+              console.log(
+                "Failed to fetch logo from Cloudinary, status:",
+                response.statusCode
+              );
+              resolve(); // Continue to fallback
+            }
+          })
+          .on("error", (error) => {
+            console.error("Error fetching logo from Cloudinary:", error);
             resolve(); // Continue to fallback
-          }
-        }).on('error', (error) => {
-          console.error("Error fetching logo from Cloudinary:", error);
-          resolve(); // Continue to fallback
-        });
+          });
       });
     } catch (error) {
       console.error("Error with Cloudinary URL:", error);
@@ -1033,7 +1079,7 @@ const generatePDFContent = async (doc, invoiceData) => {
     invoiceData.company.bankDetails.bankName
   ) {
     const bankY = totalsY;
-    
+
     doc
       .rect(margin, bankY, pageWidth / 2 - 20, 85) // More compact
       .fillColor("#F0FDF4")
@@ -1064,11 +1110,7 @@ const generatePDFContent = async (doc, invoiceData) => {
         margin + 10,
         bankY + 46
       )
-      .text(
-        `Reference: ${invoiceData.invoiceNumber}`,
-        margin + 10,
-        bankY + 58
-      );
+      .text(`Reference: ${invoiceData.invoiceNumber}`, margin + 10, bankY + 58);
 
     if (invoiceData.company.bankDetails.sortCode) {
       doc.text(
@@ -1174,6 +1216,11 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
       <div style="background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 15px; margin-top: 15px;">
         <p style="margin: 0; color: #92400E; font-weight: bold;">📦 Important Note:</p>
         <p style="margin: 5px 0 0 0; color: #92400E; font-size: 14px;">Delivery and setup prices will be added and negotiated separately, if selected by you based on location and requirements.</p>
+        <p className="text-gray-700 text-sm sm:text-base">
+  For bookings extending beyond 24 hours, additional daily charges will apply as outlined in your final invoice. Clients remain responsible for the security and proper care of all rented items throughout the entire rental period.
+</p><p className="text-gray-700 text-sm sm:text-base">
+  Multi-day bookings (over 24 hours) incur additional daily charges. Full responsibility for item security and care applies throughout the rental period.
+</p>
       </div>
     `
     : "";
@@ -1727,39 +1774,46 @@ const sendInvoiceEmail = async (booking, invoiceData) => {
 
 const getBookingEmails = async (req, res) => {
   try {
-    console.log('Fetching booking emails for mailer...');
+    console.log("Fetching booking emails for mailer...");
 
     // Fetch all bookings with only the fields needed for emails
     const bookings = await Booking.find({
       // Optional: filter by status if you only want certain bookings
       // status: { $in: ['confirmed', 'pending', 'pending_confirmation'] }
     })
-    .select('_id bookingId customerName email eventType customer eventSchedule status createdAt')
-    .sort({ createdAt: -1 }) // Sort by newest first
-    .lean(); // Use lean for better performance
+      .select(
+        "_id bookingId customerName email eventType customer eventSchedule status createdAt"
+      )
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .lean(); // Use lean for better performance
 
     console.log(`Found ${bookings.length} bookings for mailer`);
 
     // Transform the data to match your frontend sampleMails format
     const emailData = bookings.map((booking) => {
       // Handle both old and new data structures
-      const customerName = booking.customerName || 
-                          booking.customer?.personalInfo?.name || 
-                          'Unknown Customer';
-      
-      const email = booking.email || 
-                   booking.customer?.personalInfo?.email || 
-                   'no-email@example.com';
-      
-      const eventType = booking.eventType || 
-                       booking.customer?.eventDetails?.eventType || 
-                       'General Event';
-      
+      const customerName =
+        booking.customerName ||
+        booking.customer?.personalInfo?.name ||
+        "Unknown Customer";
+
+      const email =
+        booking.email ||
+        booking.customer?.personalInfo?.email ||
+        "no-email@example.com";
+
+      const eventType =
+        booking.eventType ||
+        booking.customer?.eventDetails?.eventType ||
+        "General Event";
+
       // Use event start date as bookingDate (more relevant for mailer)
-      const bookingDate = booking.eventSchedule?.startDate || 
-                         booking.createdAt.toISOString().split('T')[0];
-      
-      const status = booking.status === 'pending_confirmation' ? 'pending' : booking.status;
+      const bookingDate =
+        booking.eventSchedule?.startDate ||
+        booking.createdAt.toISOString().split("T")[0];
+
+      const status =
+        booking.status === "pending_confirmation" ? "pending" : booking.status;
 
       return {
         id: booking._id,
@@ -1767,15 +1821,16 @@ const getBookingEmails = async (req, res) => {
         email,
         eventType,
         bookingDate,
-        status: status || 'pending',
+        status: status || "pending",
       };
     });
 
     // Filter out any entries with invalid emails
-    const validEmailData = emailData.filter(item => 
-      item.email && 
-      item.email !== 'no-email@example.com' && 
-      item.email.includes('@')
+    const validEmailData = emailData.filter(
+      (item) =>
+        item.email &&
+        item.email !== "no-email@example.com" &&
+        item.email.includes("@")
     );
 
     // Calculate some basic stats for the mailer dashboard
@@ -1792,31 +1847,30 @@ const getBookingEmails = async (req, res) => {
 
     const stats = {
       totalRecipients: validEmailData.length,
-      emailsSentToday: 0, 
-      emailsSentThisMonth: 0, 
-      lastEmailSent: null, 
+      emailsSentToday: 0,
+      emailsSentThisMonth: 0,
+      lastEmailSent: null,
       thisWeekBookings: thisWeekBookings.length,
       thisMonthBookings: thisMonthBookings.length,
     };
 
     res.status(200).json({
       success: true,
-      message: 'Booking emails fetched successfully',
+      message: "Booking emails fetched successfully",
       data: {
         email: validEmailData, // Note: your Redux slice expects 'email' property
-        stats: stats
+        stats: stats,
       },
       count: validEmailData.length,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
-    console.error('Error fetching booking emails:', error);
+    console.error("Error fetching booking emails:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch booking emails',
+      message: "Failed to fetch booking emails",
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 };
