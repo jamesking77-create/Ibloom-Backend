@@ -5,8 +5,6 @@ const connectDB = async () => {
   while (retries) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
         maxPoolSize: 10,
         minPoolSize: 5,
         serverSelectionTimeoutMS: 5000,
