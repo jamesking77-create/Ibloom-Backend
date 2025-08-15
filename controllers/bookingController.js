@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Import WebSocket server
-const bookingWebSocketServer = require("../webSocket/bookingWebSocket");
+const bookingWebSocketServer = require("../webSocket/genericWebSocket");
 
 // Email configuration
 const transporter = nodemailer.createTransport({
