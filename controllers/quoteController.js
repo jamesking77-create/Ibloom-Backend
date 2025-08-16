@@ -1,4 +1,4 @@
-// controllers/quoteController.js - FIXED VERSION with Proper ID Handling
+// controllers/quoteController.js - UPDATED VERSION with Enhanced WebSocket Integration
 const Quote = require('../models/quoteModel');
 const { generateQuotePDF } = require('../utils/pdfGenerator');
 const { sendQuoteEmail } = require('../utils/emailService');
@@ -10,7 +10,6 @@ const isValidObjectId = (id) => {
 
 // Helper function to build query for finding quotes by ID
 const buildQuoteQuery = (quoteId) => {
-  // If it's a valid ObjectId, search by _id, otherwise search by quoteId
   if (isValidObjectId(quoteId)) {
     return { _id: quoteId };
   } else {
@@ -26,11 +25,9 @@ const generateQuoteId = async () => {
   let counter = 1;
 
   while (!isUnique) {
-    // Format: QR-2024-001, QR-2024-002, etc.
     const paddedCounter = String(counter).padStart(3, '0');
     quoteId = `QR-${year}-${paddedCounter}`;
     
-    // Check if this ID already exists
     const existingQuote = await Quote.findOne({ quoteId });
     if (!existingQuote) {
       isUnique = true;
@@ -40,6 +37,52 @@ const generateQuoteId = async () => {
   }
   
   return quoteId;
+};
+
+// Helper function to emit WebSocket notifications
+const emitWebSocketNotification = (eventType, data) => {
+  try {
+    // Try the new generic WebSocket first
+    if (global.genericWebSocket) {
+      switch (eventType) {
+        case 'new_quote':
+          global.genericWebSocket.emitNewQuote(data);
+          break;
+        case 'quote_status_updated':
+          global.genericWebSocket.emitQuoteStatusUpdate(
+            data.quoteId || data._id, 
+            data.oldStatus, 
+            data.newStatus, 
+            data
+          );
+          break;
+        case 'quote_deleted':
+          global.genericWebSocket.emitQuoteDeletion(data.quoteId || data._id, data);
+          break;
+        case 'quote_response_created':
+          global.genericWebSocket.emitQuoteResponseCreated(data.quoteId || data._id, data);
+          break;
+      }
+      console.log(`📡 WebSocket notification sent: ${eventType}`);
+      return;
+    }
+    
+    // Fallback to legacy methods
+    if (global.emitQuoteNotification) {
+      global.emitQuoteNotification(eventType, data);
+    } else if (global.io) {
+      global.io.emit('quote_notification', {
+        type: eventType,
+        module: 'quotes',
+        data: data,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    console.log(`📡 WebSocket notification sent via fallback: ${eventType}`);
+  } catch (error) {
+    console.error('❌ WebSocket notification failed:', error);
+  }
 };
 
 // Create new quote (Public endpoint)
@@ -126,47 +169,21 @@ exports.createQuote = async (req, res) => {
 
     console.log('✅ Quote created successfully:', quote.quoteId);
 
-    // WebSocket notification
-    try {
-      if (global.emitQuoteNotification) {
-        global.emitQuoteNotification('new_quote', {
-          _id: quote._id,
-          quoteId: quote.quoteId,
-          customer: {
-            name: quote.customer.name,
-            email: quote.customer.email,
-            phone: quote.customer.phone
-          },
-          categoryName: quote.categoryName,
-          totalItems: quote.totalItems,
-          status: quote.status,
-          createdAt: quote.createdAt,
-          viewedByAdmin: quote.viewedByAdmin
-        });
-      } else if (global.io) {
-        global.io.emit('quote_notification', {
-          type: 'new_quote',
-          module: 'quotes',
-          data: {
-            _id: quote._id,
-            quoteId: quote.quoteId,
-            customer: {
-              name: quote.customer.name,
-              email: quote.customer.email,
-              phone: quote.customer.phone
-            },
-            categoryName: quote.categoryName,
-            totalItems: quote.totalItems,
-            status: quote.status,
-            createdAt: quote.createdAt,
-            viewedByAdmin: quote.viewedByAdmin
-          }
-        });
-      }
-      console.log('📡 WebSocket notification sent for new quote');
-    } catch (wsError) {
-      console.error('❌ WebSocket notification failed:', wsError);
-    }
+    // WebSocket notification - ENHANCED
+    emitWebSocketNotification('new_quote', {
+      _id: quote._id,
+      quoteId: quote.quoteId,
+      customer: {
+        name: quote.customer.name,
+        email: quote.customer.email,
+        phone: quote.customer.phone
+      },
+      categoryName: quote.categoryName,
+      totalItems: quote.totalItems,
+      status: quote.status,
+      createdAt: quote.createdAt,
+      viewedByAdmin: quote.viewedByAdmin
+    });
 
     // Send confirmation email to customer
     try {
@@ -299,7 +316,6 @@ exports.getQuoteById = async (req, res) => {
 
     console.log('🔍 Looking for quote with ID:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
     console.log('🔍 Using query:', query);
 
@@ -347,7 +363,6 @@ exports.updateQuoteStatus = async (req, res) => {
       });
     }
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
     console.log('🔍 Using query for update:', query);
 
@@ -373,32 +388,14 @@ exports.updateQuoteStatus = async (req, res) => {
 
     console.log(`🔄 Status updated: ${quote.quoteId} (${oldStatus} → ${status})`);
 
-    // WebSocket notification
-    try {
-      if (global.emitQuoteNotification) {
-        global.emitQuoteNotification('quote_status_updated', {
-          quoteId: quote.quoteId,
-          _id: quote._id,
-          oldStatus,
-          newStatus: status,
-          updatedAt: quote.updatedAt
-        });
-      } else if (global.io) {
-        global.io.emit('quote_notification', {
-          type: 'quote_status_updated',
-          module: 'quotes',
-          data: {
-            quoteId: quote.quoteId,
-            _id: quote._id,
-            oldStatus,
-            newStatus: status,
-            updatedAt: quote.updatedAt
-          }
-        });
-      }
-    } catch (wsError) {
-      console.error('❌ WebSocket notification failed:', wsError);
-    }
+    // WebSocket notification - ENHANCED
+    emitWebSocketNotification('quote_status_updated', {
+      quoteId: quote.quoteId,
+      _id: quote._id,
+      oldStatus,
+      newStatus: status,
+      updatedAt: quote.updatedAt
+    });
 
     res.status(200).json({
       success: true,
@@ -429,7 +426,6 @@ exports.markAsViewed = async (req, res) => {
 
     console.log('👁️ Marking quote as viewed:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOne(query);
@@ -489,7 +485,6 @@ exports.createQuoteResponse = async (req, res) => {
 
     console.log('📝 Creating quote response for:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOne(query);
@@ -543,32 +538,14 @@ exports.createQuoteResponse = async (req, res) => {
 
     console.log(`📝 Quote response created: ${quote.quoteId}`);
 
-    // WebSocket notification
-    try {
-      if (global.emitQuoteNotification) {
-        global.emitQuoteNotification('quote_response_created', {
-          _id: quote._id,
-          quoteId: quote.quoteId,
-          response: quote.response,
-          status: quote.status,
-          respondedAt: quote.respondedAt
-        });
-      } else if (global.io) {
-        global.io.emit('quote_notification', {
-          type: 'quote_response_created',
-          module: 'quotes',
-          data: {
-            _id: quote._id,
-            quoteId: quote.quoteId,
-            response: quote.response,
-            status: quote.status,
-            respondedAt: quote.respondedAt
-          }
-        });
-      }
-    } catch (wsError) {
-      console.error('❌ WebSocket notification failed:', wsError);
-    }
+    // WebSocket notification - ENHANCED
+    emitWebSocketNotification('quote_response_created', {
+      _id: quote._id,
+      quoteId: quote.quoteId,
+      response: quote.response,
+      status: quote.status,
+      respondedAt: quote.respondedAt
+    });
 
     res.status(201).json({
       success: true,
@@ -594,7 +571,6 @@ exports.updateQuoteResponse = async (req, res) => {
 
     console.log('📝 Updating quote response for:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOne(query);
@@ -653,7 +629,6 @@ exports.sendQuoteResponse = async (req, res) => {
 
     console.log('📧 Sending quote response for:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOne(query);
@@ -797,7 +772,6 @@ exports.addCommunication = async (req, res) => {
       });
     }
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOne(query);
@@ -850,7 +824,6 @@ exports.deleteQuote = async (req, res) => {
 
     console.log('🗑️ Deleting quote:', quoteId);
 
-    // Build query based on ID type
     const query = buildQuoteQuery(quoteId);
 
     const quote = await Quote.findOneAndDelete(query);
@@ -864,28 +837,12 @@ exports.deleteQuote = async (req, res) => {
 
     console.log(`🗑️ Quote deleted: ${quote.quoteId}`);
 
-    // WebSocket notification
-    try {
-      if (global.emitQuoteNotification) {
-        global.emitQuoteNotification('quote_deleted', {
-          _id: quote._id,
-          quoteId: quote.quoteId,
-          customerName: quote.customer.name
-        });
-      } else if (global.io) {
-        global.io.emit('quote_notification', {
-          type: 'quote_deleted',
-          module: 'quotes',
-          data: {
-            _id: quote._id,
-            quoteId: quote.quoteId,
-            customerName: quote.customer.name
-          }
-        });
-      }
-    } catch (wsError) {
-      console.error('❌ WebSocket notification failed:', wsError);
-    }
+    // WebSocket notification - ENHANCED
+    emitWebSocketNotification('quote_deleted', {
+      _id: quote._id,
+      quoteId: quote.quoteId,
+      customerName: quote.customer.name
+    });
 
     res.status(200).json({
       success: true,
