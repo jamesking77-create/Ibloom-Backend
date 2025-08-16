@@ -198,7 +198,83 @@ const sendIndividualEmail = async ({
   });
 };
 
+
+const sendEmail = async ({
+  to,
+  subject,
+  message,
+  customerName,
+  attachments = [],
+}) => {  
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+          <div style="color: #666666; line-height: 1.6; margin-bottom: 20px;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+          ${attachments.length > 0 ? `
+            <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+              <p style="color: #666; font-size: 14px; margin: 0;">
+                📎 This email contains ${attachments.length} attachment${attachments.length > 1 ? 's' : ''}
+              </p>
+            </div>
+          ` : ''}
+          <br />
+          <p style="color: #999999; font-size: 12px; margin-top: 30px;">
+            Sent via Ibloom Email Service
+          </p>
+        </div>
+      </div>
+    `,
+    // CRITICAL FIX: Properly format attachments for nodemailer
+    attachments: attachments.map((attachment, index) => {
+      // Validate attachment before processing
+      if (!attachment.content) {
+        console.error(`Attachment ${attachment.filename} has no content!`);
+        return null;
+      }
+      
+      // Return properly formatted attachment for nodemailer
+      return {
+        filename: attachment.filename,       
+        content: attachment.content,          
+        encoding: attachment.encoding || 'base64', 
+        contentType: attachment.contentType,  
+        // Optional: Add Content-ID for inline images
+        ...(attachment.contentType && attachment.contentType.startsWith('image/') && {
+          cid: attachment.cid || `image_${index}`
+        })
+      };
+    }).filter(Boolean), // Remove null attachments
+  };
+
+  return new Promise((resolve, reject) => {
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        console.error("Error sending individual email:", {
+          error: err.message,
+          to,
+          attachmentCount: attachments.length
+        });
+        reject(err);
+      } else {
+        console.log("Individual email sent:", {
+          to,
+          messageId: info.messageId,
+          response: info.response,
+          attachmentsSent: mailOptions.attachments.length
+        });
+        resolve(info);
+      }
+    });
+  });
+};
 module.exports = {
   sendPasswordResetEmail,
   sendIndividualEmail,
+  sendEmail,
 };

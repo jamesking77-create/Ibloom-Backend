@@ -1,5 +1,5 @@
 const multer = require("multer");
-const { sendIndividualEmail } = require("../utils/emailService");
+const { sendIndividualEmail, sendEmail } = require("../utils/emailService");
 const MailHistory = require("../models/MailHistory");
 const Booking = require("../models/Bookings");
 
@@ -282,6 +282,44 @@ const sendBroadcastMail = async (req, res) => {
   }
 };
 
+const sendContactMail = async (req, res) => {
+  try {
+    const { to, subject, html, from } = req.body;
+
+    if (!to || !subject || !html || !from || !from.name || !from.email) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Validate email formats (basic regex)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to) || !emailRegex.test(from.email)) {
+      return res.status(400).json({ message: "Invalid email address" });
+    }
+
+    await sendEmail({
+      to,
+      subject,
+      message: html,
+      customerName: from.name,
+      attachments: [],
+    });
+
+    res.status(200).json({
+      message: "Email sent successfully",
+      to,
+      subject,
+      from,
+      sentAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Contact mail error:", error.message);
+    res.status(500).json({
+      message: "Failed to send email",
+      error: error.message,
+    });
+  }
+};
+
 // NEW: Get mail history endpoint
 const getMailHistory = async (req, res) => {
   try {
@@ -454,7 +492,7 @@ const getMailStats = async (userEmail = null) => {
       (monthStats[0]?.broadcastCount || 0);
 
     return {
-      totalRecipients: totalBookings || 0, 
+      totalRecipients: totalBookings || 0,
       emailsSentToday,
       emailsSentThisMonth,
       lastEmailSent: lastEmail?.sentAt || null,
@@ -509,6 +547,7 @@ const processUploadedFiles = (files) => {
 module.exports = {
   sendIndividualMail,
   sendBroadcastMail,
+  sendContactMail,
   getMailHistory,
   getMailStats,
 };
