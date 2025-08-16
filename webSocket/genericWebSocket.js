@@ -1,20 +1,20 @@
-// bookingWebSocket.js - FIXED VERSION with proper CORS support
+// webSocket/genericWebSocket.js - ENHANCED VERSION supporting all modules
 const WebSocket = require('ws');
 
-class BookingWebSocketServer {
+class GenericWebSocketServer {
   constructor() {
     this.wss = null;
     this.clients = new Map();
+    this.moduleHandlers = new Map(); // Store module-specific handlers
   }
 
   initialize(server) {
-    console.log('🔌 Initializing WebSocket server...');
+    console.log('🔌 Initializing Generic WebSocket server...');
     
     try {
       this.wss = new WebSocket.Server({ 
         server,
         path: '/websocket',
-        // FIXED: Enhanced CORS support for cross-device communication
         verifyClient: (info) => {
           const allowedOrigins = [
             'https://ibloomrentals.com',
@@ -25,9 +25,7 @@ class BookingWebSocketServer {
             'https://localhost:3001',
             'http://127.0.0.1:3000',
             'http://127.0.0.1:5173',
-            // Add your Netlify preview URLs if needed
             /^https:\/\/.*\.netlify\.app$/,
-            // Add your frontend production domain
             /^https:\/\/ibloomrentals\.com$/,
           ];
           
@@ -42,15 +40,12 @@ class BookingWebSocketServer {
             timestamp: new Date().toISOString()
           });
           
-          // FIXED: More permissive CORS for mobile devices
           if (process.env.NODE_ENV === 'production') {
-            // In production, be more permissive for mobile apps
             if (!origin) {
               console.log('✅ Allowing connection without origin (likely mobile app)');
-              return true; // Allow mobile apps and native clients
+              return true;
             }
             
-            // Check against allowed origins (including regex patterns)
             const isAllowed = allowedOrigins.some(allowed => {
               if (typeof allowed === 'string') {
                 return origin === allowed;
@@ -69,13 +64,11 @@ class BookingWebSocketServer {
             return false;
           }
           
-          // Development - allow all
           console.log('✅ Development mode - allowing all connections');
           return true;
         }
       });
 
-      // Handle server errors
       this.wss.on('error', (error) => {
         console.error('❌ WebSocket Server Error:', error);
       });
@@ -83,7 +76,6 @@ class BookingWebSocketServer {
       this.wss.on('connection', (ws, req) => {
         const clientId = `client_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         
-        // Extract more connection info
         const clientInfo = {
           ip: req.connection.remoteAddress || req.socket.remoteAddress,
           userAgent: req.headers['user-agent'],
@@ -92,7 +84,6 @@ class BookingWebSocketServer {
           realIp: req.headers['x-real-ip'],
         };
         
-        // Log connection details
         console.log('📱 New WebSocket connection:', {
           clientId,
           ...clientInfo,
@@ -106,16 +97,20 @@ class BookingWebSocketServer {
           connectedAt: new Date(),
           ...clientInfo,
           lastPing: new Date(),
-          isAlive: true
+          isAlive: true,
+          subscribedModules: new Set(), // Track which modules client is subscribed to
+          userId: null,
+          authenticated: false
         });
 
         console.log(`📱 Client connected: ${clientId} (Total: ${this.clients.size})`);
 
-        // Send welcome message immediately
+        // Send welcome message
         const welcomeMessage = {
           type: 'connection_established',
           clientId: clientId,
-          message: 'Connected to booking notifications',
+          message: 'Connected to real-time notifications',
+          supportedModules: ['bookings', 'quotes', 'orders'],
           serverTime: new Date().toISOString()
         };
         
@@ -130,10 +125,9 @@ class BookingWebSocketServer {
         ws.on('message', (data) => {
           try {
             const message = JSON.parse(data.toString());
-            console.log(`📥 Message from ${clientId}:`, message.type);
+            console.log(`📥 Message from ${clientId}:`, message.type, message.module || 'no-module');
             this.handleMessage(clientId, message);
             
-            // Update last activity
             const client = this.clients.get(clientId);
             if (client) {
               client.lastPing = new Date();
@@ -169,9 +163,8 @@ class BookingWebSocketServer {
           this.clients.delete(clientId);
         });
 
-        // Handle pong responses (keep connection alive)
+        // Handle pong responses
         ws.on('pong', () => {
-          console.log(`🏓 Pong received from ${clientId}`);
           const client = this.clients.get(clientId);
           if (client) {
             client.isAlive = true;
@@ -179,7 +172,7 @@ class BookingWebSocketServer {
           }
         });
 
-        // FIXED: Improved heartbeat mechanism
+        // Heartbeat mechanism
         const pingInterval = setInterval(() => {
           const client = this.clients.get(clientId);
           if (!client) {
@@ -189,16 +182,14 @@ class BookingWebSocketServer {
 
           if (ws.readyState === WebSocket.OPEN) {
             try {
-              // Check if client responded to last ping
               const timeSinceLastPing = Date.now() - client.lastPing.getTime();
-              if (timeSinceLastPing > 60000) { // 60 seconds without response
+              if (timeSinceLastPing > 60000) {
                 console.warn(`⚠️ Client ${clientId} appears unresponsive, closing connection`);
                 ws.terminate();
                 clearInterval(pingInterval);
                 return;
               }
 
-              // Send ping
               client.isAlive = false;
               ws.ping();
             } catch (error) {
@@ -211,36 +202,20 @@ class BookingWebSocketServer {
             clearInterval(pingInterval);
             this.clients.delete(clientId);
           }
-        }, 30000); // Ping every 30 seconds
+        }, 30000);
       });
 
-      console.log('✅ WebSocket server initialized successfully on path: /websocket');
-      console.log(`📊 Server ready to accept connections`);
+      console.log('✅ Generic WebSocket server initialized successfully on path: /websocket');
+      console.log(`📊 Server ready to accept connections for modules: bookings, quotes, orders`);
       
-      // FIXED: Add periodic cleanup for dead connections
+      // Cleanup dead connections periodically
       setInterval(() => {
         this.cleanupDeadConnections();
-      }, 60000); // Cleanup every minute
+      }, 60000);
       
     } catch (error) {
       console.error('❌ WebSocket initialization error:', error);
       throw error;
-    }
-  }
-
-  // FIXED: Add method to clean up dead connections
-  cleanupDeadConnections() {
-    let cleanedUp = 0;
-    this.clients.forEach((client, clientId) => {
-      if (client.ws.readyState !== WebSocket.OPEN) {
-        console.log(`🧹 Cleaning up dead connection: ${clientId}`);
-        this.clients.delete(clientId);
-        cleanedUp++;
-      }
-    });
-    
-    if (cleanedUp > 0) {
-      console.log(`🧹 Cleaned up ${cleanedUp} dead connections. Active: ${this.clients.size}`);
     }
   }
 
@@ -251,42 +226,34 @@ class BookingWebSocketServer {
       return;
     }
 
-    // Update client activity
     client.lastPing = new Date();
 
     switch (message.type) {
+      case 'authenticate':
+        this.handleAuthentication(clientId, message);
+        break;
+        
+      case 'subscribe':
+        this.handleSubscription(clientId, message);
+        break;
+        
+      case 'unsubscribe':
+        this.handleUnsubscription(clientId, message);
+        break;
+        
       case 'identify':
         client.type = message.clientType;
         client.userId = message.userId;
         console.log(`👤 Client ${clientId} identified as: ${message.clientType}`);
         
-        const confirmMessage = {
-          type: 'identification_confirmed',
-          clientType: client.type,
-          timestamp: new Date().toISOString()
-        };
-        
         try {
-          client.ws.send(JSON.stringify(confirmMessage));
+          client.ws.send(JSON.stringify({
+            type: 'identification_confirmed',
+            clientType: client.type,
+            timestamp: new Date().toISOString()
+          }));
         } catch (error) {
           console.error('❌ Failed to send identification confirmation:', error);
-        }
-        break;
-      
-      case 'subscribe_booking_updates':
-        client.subscribedToBookings = true;
-        console.log(`📻 Client ${clientId} subscribed to booking updates`);
-        
-        const subMessage = {
-          type: 'subscription_confirmed',
-          subscription: 'booking_updates',
-          timestamp: new Date().toISOString()
-        };
-        
-        try {
-          client.ws.send(JSON.stringify(subMessage));
-        } catch (error) {
-          console.error('❌ Failed to send subscription confirmation:', error);
         }
         break;
 
@@ -314,41 +281,135 @@ class BookingWebSocketServer {
     }
   }
 
-  broadcastToType(clientType, message) {
+  handleAuthentication(clientId, message) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      // For now, simple authentication - you can enhance with JWT verification
+      if (message.token) {
+        // TODO: Add JWT verification here
+        client.authenticated = true;
+        client.userId = message.userId;
+        client.type = message.clientType || 'user';
+        
+        console.log(`✅ Client ${clientId} authenticated as ${client.type}`);
+        
+        client.ws.send(JSON.stringify({
+          type: 'authentication_success',
+          clientType: client.type,
+          modules: ['bookings', 'quotes', 'orders'],
+          timestamp: new Date().toISOString()
+        }));
+      } else {
+        client.ws.send(JSON.stringify({
+          type: 'authentication_failed',
+          message: 'No token provided'
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Authentication error:', error);
+      client.ws.send(JSON.stringify({
+        type: 'authentication_failed',
+        message: 'Authentication failed'
+      }));
+    }
+  }
+
+  handleSubscription(clientId, message) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    const { module } = message;
+    const validModules = ['bookings', 'quotes', 'orders'];
+    
+    if (!validModules.includes(module)) {
+      client.ws.send(JSON.stringify({
+        type: 'subscription_failed',
+        message: `Invalid module: ${module}`,
+        validModules
+      }));
+      return;
+    }
+
+    client.subscribedModules.add(module);
+    
+    console.log(`📻 Client ${clientId} subscribed to ${module} updates`);
+    
+    try {
+      client.ws.send(JSON.stringify({
+        type: 'subscription_confirmed',
+        module: module,
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error('❌ Failed to send subscription confirmation:', error);
+    }
+  }
+
+  handleUnsubscription(clientId, message) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    const { module } = message;
+    client.subscribedModules.delete(module);
+    
+    console.log(`📻 Client ${clientId} unsubscribed from ${module} updates`);
+    
+    try {
+      client.ws.send(JSON.stringify({
+        type: 'unsubscription_confirmed',
+        module: module,
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error('❌ Failed to send unsubscription confirmation:', error);
+    }
+  }
+
+  // Generic broadcast method
+  broadcast(message, filter = null) {
     let sentCount = 0;
     let totalTargets = 0;
     let failedClients = [];
     
     this.clients.forEach((client, clientId) => {
-      if (client.type === clientType) {
-        totalTargets++;
-        if (client.ws.readyState === WebSocket.OPEN) {
-          try {
-            client.ws.send(JSON.stringify({
-              ...message,
-              timestamp: new Date().toISOString()
-            }));
-            sentCount++;
-            console.log(`📤 Message sent to ${clientType} client: ${clientId}`);
-          } catch (error) {
-            console.error(`❌ Send error to ${clientId}:`, error);
-            failedClients.push(clientId);
-          }
-        } else {
-          console.warn(`⚠️ Client ${clientId} connection not open (state: ${client.ws.readyState})`);
+      // Apply filter if provided
+      if (filter && !filter(client)) {
+        return;
+      }
+      
+      totalTargets++;
+      
+      if (client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(JSON.stringify({
+            ...message,
+            timestamp: new Date().toISOString()
+          }));
+          sentCount++;
+        } catch (error) {
+          console.error(`❌ Send error to ${clientId}:`, error);
           failedClients.push(clientId);
         }
+      } else {
+        console.warn(`⚠️ Client ${clientId} connection not open (state: ${client.ws.readyState})`);
+        failedClients.push(clientId);
       }
     });
 
     // Clean up failed clients
     failedClients.forEach(clientId => {
-      console.log(`🧹 Removing failed client: ${clientId}`);
       this.clients.delete(clientId);
     });
 
-    console.log(`📢 Broadcasted to ${sentCount}/${totalTargets} ${clientType} clients`);
+    console.log(`📢 Broadcasted ${message.type} to ${sentCount}/${totalTargets} clients`);
     return { sent: sentCount, total: totalTargets, failed: failedClients.length };
+  }
+
+  // Legacy booking methods (for backward compatibility)
+  broadcastToType(clientType, message) {
+    return this.broadcast(message, (client) => client.type === clientType);
   }
 
   emitNewBooking(bookingData) {
@@ -356,6 +417,7 @@ class BookingWebSocketServer {
     
     const message = {
       type: 'new_booking',
+      module: 'bookings',
       data: {
         bookingId: bookingData.bookingId || bookingData._id,
         customerName: bookingData.customer?.personalInfo?.name,
@@ -365,16 +427,17 @@ class BookingWebSocketServer {
       }
     };
 
-    const result = this.broadcastToType('admin', message);
-    console.log(`🔔 New booking broadcast result:`, result);
-    return result;
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('bookings');
+    });
   }
 
   emitBookingStatusUpdate(bookingId, oldStatus, newStatus, bookingData = {}) {
-    console.log(`🔄 Emitting status update: ${bookingId} (${oldStatus} → ${newStatus})`);
+    console.log(`🔄 Emitting booking status update: ${bookingId} (${oldStatus} → ${newStatus})`);
     
     const message = {
       type: 'booking_status_update',
+      module: 'bookings',
       data: {
         bookingId,
         oldStatus,
@@ -384,16 +447,17 @@ class BookingWebSocketServer {
       }
     };
 
-    const result = this.broadcastToType('admin', message);
-    console.log(`🔄 Status update broadcast result:`, result);
-    return result;
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('bookings');
+    });
   }
 
   emitBookingDeletion(bookingId, bookingData = {}) {
-    console.log(`🗑️ Emitting deletion notification: ${bookingId}`);
+    console.log(`🗑️ Emitting booking deletion notification: ${bookingId}`);
     
     const message = {
       type: 'booking_deleted',
+      module: 'bookings',
       data: {
         bookingId,
         customerName: bookingData.customerName,
@@ -401,9 +465,109 @@ class BookingWebSocketServer {
       }
     };
 
-    const result = this.broadcastToType('admin', message);
-    console.log(`🗑️ Deletion broadcast result:`, result);
-    return result;
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('bookings');
+    });
+  }
+
+  // NEW: Quote-specific methods
+  emitNewQuote(quoteData) {
+    console.log('🆕 Emitting new quote notification:', quoteData.quoteId || quoteData._id);
+    
+    const message = {
+      type: 'new_quote',
+      module: 'quotes',
+      data: {
+        _id: quoteData._id,
+        quoteId: quoteData.quoteId,
+        customer: {
+          name: quoteData.customer?.name,
+          email: quoteData.customer?.email,
+          phone: quoteData.customer?.phone
+        },
+        categoryName: quoteData.categoryName,
+        status: quoteData.status,
+        totalItems: quoteData.totalItems || quoteData.items?.length || 0,
+        createdAt: quoteData.createdAt,
+        viewedByAdmin: quoteData.viewedByAdmin || false
+      }
+    };
+
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('quotes');
+    });
+  }
+
+  emitQuoteStatusUpdate(quoteId, oldStatus, newStatus, quoteData = {}) {
+    console.log(`🔄 Emitting quote status update: ${quoteId} (${oldStatus} → ${newStatus})`);
+    
+    const message = {
+      type: 'quote_status_updated',
+      module: 'quotes',
+      data: {
+        quoteId,
+        _id: quoteData._id,
+        oldStatus,
+        newStatus,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('quotes');
+    });
+  }
+
+  emitQuoteDeletion(quoteId, quoteData = {}) {
+    console.log(`🗑️ Emitting quote deletion notification: ${quoteId}`);
+    
+    const message = {
+      type: 'quote_deleted',
+      module: 'quotes',
+      data: {
+        quoteId,
+        _id: quoteData._id,
+        customerName: quoteData.customerName || quoteData.customer?.name
+      }
+    };
+
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('quotes');
+    });
+  }
+
+  emitQuoteResponseCreated(quoteId, quoteData) {
+    console.log('📝 Emitting quote response created:', quoteId);
+    
+    const message = {
+      type: 'quote_response_created',
+      module: 'quotes',
+      data: {
+        quoteId,
+        _id: quoteData._id,
+        response: quoteData.response,
+        status: quoteData.status,
+        respondedAt: quoteData.respondedAt
+      }
+    };
+
+    return this.broadcast(message, (client) => {
+      return client.type === 'admin' && client.subscribedModules.has('quotes');
+    });
+  }
+
+  cleanupDeadConnections() {
+    let cleanedUp = 0;
+    this.clients.forEach((client, clientId) => {
+      if (client.ws.readyState !== WebSocket.OPEN) {
+        this.clients.delete(clientId);
+        cleanedUp++;
+      }
+    });
+    
+    if (cleanedUp > 0) {
+      console.log(`🧹 Cleaned up ${cleanedUp} dead connections. Active: ${this.clients.size}`);
+    }
   }
 
   getStats() {
@@ -412,6 +576,12 @@ class BookingWebSocketServer {
       adminConnections: 0,
       userConnections: 0,
       unknownConnections: 0,
+      authenticatedConnections: 0,
+      moduleSubscriptions: {
+        bookings: 0,
+        quotes: 0,
+        orders: 0
+      },
       connections: []
     };
 
@@ -419,16 +589,21 @@ class BookingWebSocketServer {
       const clientInfo = {
         id: client.id,
         type: client.type,
+        authenticated: client.authenticated,
         connectedAt: client.connectedAt,
         ip: client.ip,
-        realIp: client.realIp,
         origin: client.origin,
         state: client.ws.readyState,
         isAlive: client.isAlive,
-        lastPing: client.lastPing
+        lastPing: client.lastPing,
+        subscribedModules: Array.from(client.subscribedModules)
       };
       
       stats.connections.push(clientInfo);
+      
+      if (client.authenticated) {
+        stats.authenticatedConnections++;
+      }
       
       switch (client.type) {
         case 'admin':
@@ -440,32 +615,22 @@ class BookingWebSocketServer {
         default:
           stats.unknownConnections++;
       }
+
+      // Count module subscriptions
+      client.subscribedModules.forEach(module => {
+        if (stats.moduleSubscriptions[module] !== undefined) {
+          stats.moduleSubscriptions[module]++;
+        }
+      });
     });
 
     return stats;
   }
 
-  // Method to check server health
-  healthCheck() {
-    const stats = this.getStats();
-    console.log('🏥 WebSocket Health Check:', {
-      isRunning: !!this.wss,
-      connections: stats.totalConnections,
-      breakdown: {
-        admin: stats.adminConnections,
-        user: stats.userConnections,
-        unknown: stats.unknownConnections
-      }
-    });
-    return stats;
-  }
-
-  // FIXED: Enhanced close method
   close() {
-    console.log('🔌 Closing WebSocket server...');
+    console.log('🔌 Closing Generic WebSocket server...');
     
     if (this.wss) {
-      // Notify all clients about shutdown
       const shutdownMessage = {
         type: 'server_shutdown',
         message: 'Server is shutting down',
@@ -486,11 +651,11 @@ class BookingWebSocketServer {
       this.clients.clear();
 
       this.wss.close(() => {
-        console.log('✅ WebSocket server closed');
+        console.log('✅ Generic WebSocket server closed');
       });
     }
   }
 }
 
-const bookingWebSocketServer = new BookingWebSocketServer();
-module.exports = bookingWebSocketServer;
+const genericWebSocketServer = new GenericWebSocketServer();
+module.exports = genericWebSocketServer;

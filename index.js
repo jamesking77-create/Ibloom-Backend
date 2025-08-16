@@ -1,4 +1,4 @@
-// index.js - UPDATED VERSION with Quote Routes and WebSocket Integration
+// index.js - UPDATED VERSION with Generic WebSocket for All Modules
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -7,7 +7,8 @@ require("dotenv").config();
 // Import database connection
 require("./config/database");
 
-const bookingWebSocketServer = require("./webSocket/bookingWebSocket");
+// UPDATED: Import generic WebSocket instead of booking-specific one
+const genericWebSocketServer = require("./webSocket/genericWebSocket");
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +19,7 @@ app.use(cors({
     ? [
         process.env.FRONTEND_URL,
         'https://ibloomrentals.com'
-      ].filter(Boolean) // Remove any undefined values
+      ].filter(Boolean)
     : ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'],
   credentials: true
 }));
@@ -27,22 +28,26 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 🔧 NEW: Make WebSocket server available globally for quotes
-// This allows your quote controller to send WebSocket notifications
+// UPDATED: Make generic WebSocket server available globally
 app.use((req, res, next) => {
-  req.wss = bookingWebSocketServer; // Attach WebSocket server to request
+  req.wss = genericWebSocketServer;
   next();
 });
 
-// 🔧 NEW: Global WebSocket helper for quote notifications
+// UPDATED: Global WebSocket helpers for all modules
+global.genericWebSocket = genericWebSocketServer;
+
+// Legacy helpers for backward compatibility
 global.emitQuoteNotification = (eventType, data) => {
   try {
-    if (bookingWebSocketServer && bookingWebSocketServer.broadcast) {
-      bookingWebSocketServer.broadcast({
+    if (genericWebSocketServer) {
+      genericWebSocketServer.broadcast({
         type: eventType,
-        module: 'quotes', // 🔧 Distinguish from booking events
+        module: 'quotes',
         data: data,
         timestamp: new Date().toISOString()
+      }, (client) => {
+        return client.type === 'admin' && client.subscribedModules.has('quotes');
       });
       console.log(`📡 Quote WebSocket notification sent: ${eventType}`);
     }
@@ -51,18 +56,19 @@ global.emitQuoteNotification = (eventType, data) => {
   }
 };
 
-// Health check route
+// Health check route - ENHANCED
 app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "ok",
     timestamp: new Date().toISOString(),
     websocket: {
-      initialized: !!bookingWebSocketServer.wss,
-      stats: bookingWebSocketServer.getStats()
+      initialized: !!genericWebSocketServer.wss,
+      stats: genericWebSocketServer.getStats()
     },
-    quotes: {
-      enabled: true,
-      websocketIntegration: true
+    modules: {
+      bookings: { enabled: true, websocketIntegration: true },
+      quotes: { enabled: true, websocketIntegration: true },
+      orders: { enabled: false, websocketIntegration: false }
     }
   });
 });
@@ -74,7 +80,7 @@ const userRoutes = require("./routes/userRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
-const quoteRoutes = require("./routes/quoteRoutes"); // 🔧 Quote routes
+const quoteRoutes = require("./routes/quoteRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
@@ -82,18 +88,18 @@ app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/mailer", mailRoutes);
-app.use("/api/quotes", quoteRoutes); // 🔧 Quote endpoints
+app.use("/api/quotes", quoteRoutes);
 
-// WebSocket stats endpoint (Enhanced for quotes)
+// WebSocket stats endpoint - ENHANCED for all modules
 app.get("/api/websocket/stats", (req, res) => {
   try {
-    const stats = bookingWebSocketServer.getStats();
+    const stats = genericWebSocketServer.getStats();
     res.status(200).json({
       success: true,
       stats: {
         ...stats,
-        supportedModules: ['bookings', 'quotes'], // 🔧 Show supported modules
-        quoteNotifications: true
+        supportedModules: ['bookings', 'quotes', 'orders'],
+        activeModules: ['bookings', 'quotes']
       },
       timestamp: new Date().toISOString()
     });
@@ -106,17 +112,95 @@ app.get("/api/websocket/stats", (req, res) => {
   }
 });
 
-// 🔧 NEW: Quote WebSocket test endpoint (for debugging)
+// UPDATED: Generic WebSocket test endpoints for each module
+app.post("/api/websocket/test/:module", (req, res) => {
+  try {
+    const { module } = req.params;
+    const validModules = ['bookings', 'quotes', 'orders'];
+    
+    if (!validModules.includes(module)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid module. Supported modules: ${validModules.join(', ')}`
+      });
+    }
+
+    genericWebSocketServer.broadcast({
+      type: `test_${module}_notification`,
+      module: module,
+      data: {
+        message: `WebSocket test for ${module}`,
+        timestamp: new Date().toISOString()
+      }
+    }, (client) => {
+      return client.subscribedModules.has(module);
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: `${module} WebSocket test notification sent`
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Specific test endpoints for backward compatibility
 app.post("/api/quotes/test-websocket", (req, res) => {
   try {
-    global.emitQuoteNotification('test_quote_notification', {
-      message: 'WebSocket test for quotes',
-      timestamp: new Date().toISOString()
+    genericWebSocketServer.emitNewQuote({
+      _id: 'test_id',
+      quoteId: 'TEST-001',
+      customer: {
+        name: 'Test Customer',
+        email: 'test@example.com',
+        phone: '+1234567890'
+      },
+      categoryName: 'Test Category',
+      status: 'pending',
+      totalItems: 2,
+      createdAt: new Date(),
+      viewedByAdmin: false
     });
     
     res.status(200).json({
       success: true,
       message: 'Quote WebSocket test notification sent'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post("/api/bookings/test-websocket", (req, res) => {
+  try {
+    genericWebSocketServer.emitNewBooking({
+      _id: 'test_booking_id',
+      bookingId: 'BOOK-TEST-001',
+      customer: {
+        personalInfo: {
+          name: 'Test Customer'
+        },
+        eventDetails: {
+          eventType: 'Test Event'
+        }
+      },
+      pricing: {
+        formatted: {
+          total: '₦100,000'
+        }
+      }
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Booking WebSocket test notification sent'
     });
   } catch (error) {
     res.status(500).json({
@@ -152,14 +236,16 @@ server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on ${HOST}:${PORT}`);
   console.log(`📍 Health check available at: http://${HOST}:${PORT}/health`);
   console.log(`📊 WebSocket stats available at: http://${HOST}:${PORT}/api/websocket/stats`);
-  console.log(`📝 Quote endpoints available at: http://${HOST}:${PORT}/api/quotes`); // 🔧 Quote endpoints
-  console.log(`🧪 Quote WebSocket test: POST http://${HOST}:${PORT}/api/quotes/test-websocket`); // 🔧 Test endpoint
+  console.log(`📝 Quote endpoints available at: http://${HOST}:${PORT}/api/quotes`);
+  console.log(`📚 Booking endpoints available at: http://${HOST}:${PORT}/api/bookings`);
+  console.log(`🧪 WebSocket tests available at: POST http://${HOST}:${PORT}/api/websocket/test/{module}`);
   
   try {
-    console.log("🔌 Initializing WebSocket server...");
-    bookingWebSocketServer.initialize(server);
-    console.log(`✅ WebSocket server initialized at: ws://${HOST}:${PORT}/websocket`);
-    console.log(`📡 WebSocket supports: bookings, quotes`); // 🔧 Show supported modules
+    console.log("🔌 Initializing Generic WebSocket server...");
+    genericWebSocketServer.initialize(server);
+    console.log(`✅ Generic WebSocket server initialized at: ws://${HOST}:${PORT}/websocket`);
+    console.log(`📡 WebSocket supports modules: bookings, quotes, orders`);
+    console.log(`📱 Clients can subscribe to specific modules for targeted notifications`);
   } catch (error) {
     console.error('❌ Failed to initialize WebSocket server:', error);
     console.error('Error details:', error.message);
@@ -170,7 +256,7 @@ server.listen(PORT, HOST, () => {
 // Graceful shutdown
 const gracefulShutdown = (signal) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
-  bookingWebSocketServer.close();
+  genericWebSocketServer.close();
   server.close((err) => {
     if (err) {
       console.error('❌ Error during server shutdown:', err);
