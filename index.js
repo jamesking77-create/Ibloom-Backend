@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 require("dotenv").config();
+const User = require("./models/User");
 
 // Import database connection
 require("./config/database");
@@ -81,7 +82,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
 const quoteRoutes = require("./routes/quoteRoutes");
-app.use('/api/public', require('./routes/public'));
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
@@ -150,6 +151,7 @@ app.post("/api/websocket/test/:module", (req, res) => {
   }
 });
 
+
 // Specific test endpoints for backward compatibility
 app.post("/api/quotes/test-websocket", (req, res) => {
   try {
@@ -210,6 +212,54 @@ app.post("/api/bookings/test-websocket", (req, res) => {
       error: error.message
     });
   }
+});
+
+
+// In your backend routes
+app.get('/api/company/info', async (req, res) => {
+  try {
+    // Get the admin user (assuming only one admin exists)
+    const adminUser = await User.findOne({ role: 'user' });
+    
+    if (!adminUser) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Company information not found' 
+      });
+    }
+
+    // Return only public company information
+    const companyInfo = {
+      name: adminUser.name,
+      bio: adminUser.bio,
+      location: adminUser.location,
+      phone: adminUser.phone,
+      email: adminUser.email,
+      avatar: adminUser.avatar,
+      specialize: adminUser.specialize,
+      categories: adminUser.categories,
+      joinDate: adminUser.joinDate
+    };
+
+    res.status(200).json({
+      success: true,
+      data: { company: companyInfo }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch company information' 
+    });
+  }
+});
+
+app.get('/api/keep-alive', (req, res) => {
+  console.log('🏓 Keep-alive ping received at:', new Date().toISOString());
+  res.status(200).json({
+    message: "i am active",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Error handling middleware
