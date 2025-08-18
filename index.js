@@ -81,6 +81,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
 const quoteRoutes = require("./routes/quoteRoutes");
+app.use('/api/public', require('./routes/public'));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
@@ -89,6 +90,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/mailer", mailRoutes);
 app.use("/api/quotes", quoteRoutes);
+
 
 // WebSocket stats endpoint - ENHANCED for all modules
 app.get("/api/websocket/stats", (req, res) => {
