@@ -1,4 +1,4 @@
-// controllers/orderController.js - COMPLETE ORDERS CONTROLLER WITH WEBSOCKET AND INVOICE SUPPORT
+// controllers/orderController.js - COMPLETE ORDERS CONTROLLER WITH WEBSOCKET AND INVOICE SUPPORT - FIXED NaN ISSUE
 const Order = require('../models/Order');
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Import Generic WebSocket server - will be available globally
- const genericWebSocketServer = require("../webSocket/genericWebSocket");
+const genericWebSocketServer = require("../webSocket/genericWebSocket");
 
 // Email configuration
 const transporter = nodemailer.createTransport({
@@ -109,30 +109,85 @@ const tryLocalLogoPaths = () => {
 
 // Helper function to format currency
 const formatCurrency = (amount) => {
+  const numericAmount = parseFloat(amount) || 0;
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
     minimumFractionDigits: 2,
-  }).format(amount);
+  }).format(numericAmount);
 };
 
-// Helper function to calculate order total with daily rates
+// FIXED: Helper function to safely parse float values
+const safeParseFloat = (value, defaultValue = 0) => {
+  if (value === null || value === undefined || value === '') {
+    return defaultValue;
+  }
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+};
+
+// FIXED: Helper function to get item price from various possible fields
+const getItemPrice = (item) => {
+  // Try different possible price fields in order of preference
+  const priceFields = [
+    'pricePerUnit',
+    'pricePerDay', 
+    'unitPrice',
+    'price',
+    'cost',
+    'rate'
+  ];
+  
+  for (const field of priceFields) {
+    if (item[field] !== undefined && item[field] !== null && item[field] !== '') {
+      const price = safeParseFloat(item[field]);
+      if (price > 0) {
+        return price;
+      }
+    }
+  }
+  
+  // If no valid price found, return 0 and log warning
+  console.warn(`No valid price found for item: ${item.name || 'Unknown item'}`, item);
+  return 0;
+};
+
+// FIXED: Helper function to calculate order total with daily rates - HANDLES NaN VALUES
 const calculateOrderPricing = (order, dailyRate = 0) => {
   const { items, dateInfo } = order;
   const { startDate, endDate } = dateInfo;
   
-  // Calculate rental duration
+  // Calculate rental duration safely
   const start = new Date(startDate);
   const end = new Date(endDate);
-  const durationInDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  const timeDiff = end.getTime() - start.getTime();
+  const durationInDays = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1);
   
-  // Calculate items subtotal (quantity-based)
-  const itemsSubtotal = items.reduce((total, item) => {
-    return total + (item.pricePerDay * item.quantity);
-  }, 0);
+  console.log('Calculating pricing for order:', {
+    startDate,
+    endDate,
+    durationInDays,
+    itemsCount: items ? items.length : 0,
+    dailyRate
+  });
   
-  // Calculate daily rate charges
-  const dailyCharges = dailyRate * durationInDays;
+  // Calculate items subtotal with proper error handling
+  let itemsSubtotal = 0;
+  if (items && Array.isArray(items)) {
+    itemsSubtotal = items.reduce((total, item) => {
+      const itemPrice = getItemPrice(item);
+      const quantity = safeParseFloat(item.quantity, 1);
+      const itemTotal = itemPrice * quantity;
+      
+      console.log(`Item: ${item.name || 'Unknown'}, Price: ${itemPrice}, Qty: ${quantity}, Total: ${itemTotal}`);
+      
+      return total + itemTotal;
+    }, 0);
+  }
+  
+  // Calculate daily rate charges safely
+  const safeDailyRate = safeParseFloat(dailyRate, 0);
+  const dailyCharges = safeDailyRate * durationInDays;
   
   // Calculate subtotal
   const subtotal = itemsSubtotal + dailyCharges;
@@ -143,10 +198,10 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
   // Calculate total
   const total = subtotal + tax;
   
-  return {
+  const result = {
     itemsSubtotal,
     dailyCharges,
-    dailyRate,
+    dailyRate: safeDailyRate,
     durationInDays,
     subtotal,
     tax,
@@ -154,12 +209,15 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
     formatted: {
       itemsSubtotal: formatCurrency(itemsSubtotal),
       dailyCharges: formatCurrency(dailyCharges),
-      dailyRate: formatCurrency(dailyRate),
+      dailyRate: formatCurrency(safeDailyRate),
       subtotal: formatCurrency(subtotal),
       tax: formatCurrency(tax),
       total: formatCurrency(total),
     }
   };
+  
+  console.log('Calculated pricing result:', result);
+  return result;
 };
 
 // Get all orders
@@ -188,7 +246,7 @@ const getOrders = async (req, res) => {
     const totalRevenue = orders
       .filter((o) => o.status === "completed")
       .reduce((acc, o) => {
-        const amount = o.pricing?.total || 0;
+        const amount = safeParseFloat(o.pricing?.total, 0);
         return acc + amount;
       }, 0);
 
@@ -247,8 +305,8 @@ const createOrder = async (req, res) => {
             orderId: order._id,
             orderNumber: order.orderNumber,
             customerName: order.customerInfo.name,
-            total: formatCurrency(order.pricing.total),
-            items: order.items.length,
+            total: formatCurrency(safeParseFloat(order.pricing?.total, 0)),
+            items: order.items ? order.items.length : 0,
             status: order.status,
             timestamp: new Date().toISOString()
           }
@@ -455,7 +513,7 @@ const deleteOrder = async (req, res) => {
   }
 };
 
-// Generate and send order invoice
+// FIXED: Generate and send order invoice - HANDLES NaN VALUES
 const sendOrderInvoice = async (req, res) => {
   try {
     const { orderId, customerEmail, customerName, dailyRate = 0 } = req.body;
@@ -474,8 +532,19 @@ const sendOrderInvoice = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Calculate pricing with daily rates
+    console.log("Order data for invoice:", JSON.stringify(order, null, 2));
+
+    // Calculate pricing with daily rates - this now handles NaN properly
     const pricingDetails = calculateOrderPricing(order, parseFloat(dailyRate) || 0);
+    
+    // Double-check that we don't have any NaN values
+    if (isNaN(pricingDetails.total) || isNaN(pricingDetails.subtotal) || isNaN(pricingDetails.tax)) {
+      console.error("NaN detected in pricing calculations:", pricingDetails);
+      return res.status(400).json({ 
+        message: "Error calculating invoice totals. Please check order data.",
+        details: pricingDetails
+      });
+    }
 
     // Generate invoice data
     const invoiceData = {
@@ -519,15 +588,21 @@ const sendOrderInvoice = async (req, res) => {
         notes: order.notes
       },
 
-      // Items
-      items: order.items.map(item => ({
-        name: item.name,
-        category: item.category,
-        quantity: item.quantity,
-        pricePerDay: item.pricePerDay,
-        totalPrice: item.totalPrice,
-        description: `${item.quantity} x ${formatCurrency(item.pricePerDay)} per day`
-      })),
+      // Items - FIXED to handle different price field names
+      items: order.items ? order.items.map(item => {
+        const itemPrice = getItemPrice(item);
+        const quantity = safeParseFloat(item.quantity, 1);
+        const itemTotal = itemPrice * quantity;
+        
+        return {
+          name: item.name,
+          category: item.category,
+          quantity: quantity,
+          pricePerDay: itemPrice,
+          totalPrice: itemTotal,
+          description: `${quantity} x ${formatCurrency(itemPrice)} per unit`
+        };
+      }) : [],
 
       // Pricing
       ...pricingDetails,
@@ -549,6 +624,8 @@ const sendOrderInvoice = async (req, res) => {
       requiresDeposit: pricingDetails.total > 50000,
       depositAmount: pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
     };
+
+    console.log("Generated invoice data:", JSON.stringify(invoiceData, null, 2));
 
     // Generate PDF buffer
     const pdfBuffer = await generateOrderInvoicePDF(invoiceData);
@@ -933,23 +1010,30 @@ const sendOrderInvoiceEmail = async (customerEmail, customerName, invoiceData, p
   console.log(`Order invoice email sent to: ${customerEmail}`);
 };
 
-// Generate HTML content for order invoice email
+// FIXED: Generate HTML content for order invoice email - HANDLES NaN VALUES
 const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
   const logoImg = logoBase64
     ? `<img src="cid:companylogo" alt="Company Logo" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">`
     : `<div style="width: 80px; height: 80px; background: #E5E7EB; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #9CA3AF; font-weight: bold; font-size: 12px;">LOGO</div>`;
 
-  const itemsHTML = invoiceData.items
+  const itemsHTML = invoiceData.items && invoiceData.items.length > 0
     ? invoiceData.items
         .map((item) => `
           <tr style="border-bottom: 1px solid #E5E7EB;">
-            <td style="padding: 8px 0; font-weight: bold;">${item.name}</td>
-            <td style="padding: 8px 0; text-align: center;">${item.quantity}</td>
-            <td style="padding: 8px 0; text-align: right;">${formatCurrency(item.totalPrice)}</td>
+            <td style="padding: 8px 0; font-weight: bold;">${item.name || 'Unknown Item'}</td>
+            <td style="padding: 8px 0; text-align: center;">${safeParseFloat(item.quantity, 1)}</td>
+            <td style="padding: 8px 0; text-align: right;">${formatCurrency(safeParseFloat(item.totalPrice, 0))}</td>
           </tr>
         `)
         .join("")
-    : "";
+    : `<tr><td colspan="3" style="padding: 8px 0; text-align: center; color: #6B7280;">No items found</td></tr>`;
+
+  // Ensure all values are properly formatted and not NaN
+  const safeItemsSubtotal = formatCurrency(safeParseFloat(invoiceData.itemsSubtotal, 0));
+  const safeDailyCharges = formatCurrency(safeParseFloat(invoiceData.dailyCharges, 0));
+  const safeTax = formatCurrency(safeParseFloat(invoiceData.tax, 0));
+  const safeTotal = formatCurrency(safeParseFloat(invoiceData.total, 0));
+  const safeDuration = safeParseFloat(invoiceData.order?.duration, 1);
 
   return `
     <!DOCTYPE html>
@@ -971,7 +1055,7 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
 
       <!-- Greeting -->
       <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-        <h2 style="color: #1F2937; margin-top: 0;">Hello ${customerName}!</h2>
+        <h2 style="color: #1F2937; margin-top: 0;">Hello ${customerName || 'Valued Customer'}!</h2>
         <p style="margin: 0;">Thank you for your order! Please find your invoice attached for your rental order.</p>
       </div>
 
@@ -985,33 +1069,33 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Order Number:</td>
-            <td style="padding: 12px 0;">${invoiceData.order.orderNumber}</td>
+            <td style="padding: 12px 0;">${invoiceData.order?.orderNumber || 'N/A'}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Rental Period:</td>
-            <td style="padding: 12px 0;">${invoiceData.order.duration} days</td>
+            <td style="padding: 12px 0;">${safeDuration} days</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Items Subtotal:</td>
-            <td style="padding: 12px 0;">${invoiceData.formatted.itemsSubtotal}</td>
+            <td style="padding: 12px 0;">${safeItemsSubtotal}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Daily Charges:</td>
-            <td style="padding: 12px 0;">${invoiceData.formatted.dailyCharges}</td>
+            <td style="padding: 12px 0;">${safeDailyCharges}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Tax (7.5%):</td>
-            <td style="padding: 12px 0;">${invoiceData.formatted.tax}</td>
+            <td style="padding: 12px 0;">${safeTax}</td>
           </tr>
           <tr style="background: #F0FDF4;">
             <td style="padding: 15px 0; font-weight: bold; color: #166534; font-size: 16px;">Total Amount:</td>
-            <td style="padding: 15px 0; font-weight: bold; color: #059669; font-size: 20px;">${invoiceData.formatted.total}</td>
+            <td style="padding: 15px 0; font-weight: bold; color: #059669; font-size: 20px;">${safeTotal}</td>
           </tr>
         </table>
       </div>
 
       <!-- Items List -->
-      ${itemsHTML ? `
+      ${invoiceData.items && invoiceData.items.length > 0 ? `
       <div style="background: white; border: 2px solid #E5E7EB; border-radius: 10px; padding: 25px; margin-bottom: 25px;">
         <h3 style="color: #4F46E5; margin-top: 0;">Rental Items</h3>
         <table style="width: 100%; border-collapse: collapse;">
@@ -1057,7 +1141,7 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
       <!-- Footer -->
       <div style="text-align: center; padding: 20px; background: #F8FAFC; border-radius: 8px; border-top: 3px solid #4F46E5;">
         <p style="margin: 0; color: #6B7280; font-size: 16px; font-weight: bold;">
-          Thank you for choosing ${invoiceData.company.name}!
+          Thank you for choosing ${invoiceData.company?.name || 'iBloom Rentals'}!
         </p>
         <p style="margin: 10px 0 0 0; color: #9CA3AF; font-size: 12px;">
           This email was sent automatically. Please save this email and the attached invoice for your records.
@@ -1068,6 +1152,7 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
   `;
 };
 
+// FIXED: Download order invoice - HANDLES NaN VALUES
 const downloadOrderInvoice = async (req, res) => {
   try {
     const { orderId, customerEmail, customerName, dailyRate = 0 } = req.body;
@@ -1084,10 +1169,21 @@ const downloadOrderInvoice = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Calculate pricing with daily rates
-    const pricingDetails = calculateOrderPricing(order, parseFloat(dailyRate) || 0);
+    console.log("Order data for download:", JSON.stringify(order, null, 2));
 
-    // Generate invoice data (same as above)
+    // Calculate pricing with daily rates - this now handles NaN properly
+    const pricingDetails = calculateOrderPricing(order, parseFloat(dailyRate) || 0);
+    
+    // Double-check that we don't have any NaN values
+    if (isNaN(pricingDetails.total) || isNaN(pricingDetails.subtotal) || isNaN(pricingDetails.tax)) {
+      console.error("NaN detected in pricing calculations for download:", pricingDetails);
+      return res.status(400).json({ 
+        message: "Error calculating invoice totals. Please check order data.",
+        details: pricingDetails
+      });
+    }
+
+    // Generate invoice data (same structure as sendOrderInvoice)
     const invoiceData = {
       invoiceNumber: `INV-${order.orderNumber.replace('Order #', '')}`,
       issueDate: new Date().toISOString(),
@@ -1126,7 +1222,8 @@ const downloadOrderInvoice = async (req, res) => {
         notes: order.notes
       },
 
-      items: order.items.map(item => {
+      // Items - FIXED to handle different price field names
+      items: order.items ? order.items.map(item => {
         const itemPrice = getItemPrice(item);
         const quantity = safeParseFloat(item.quantity, 1);
         const itemTotal = itemPrice * quantity;
@@ -1139,13 +1236,15 @@ const downloadOrderInvoice = async (req, res) => {
           totalPrice: itemTotal,
           description: `${quantity} x ${formatCurrency(itemPrice)} per unit`
         };
-      }),
+      }) : [],
 
       ...pricingDetails,
 
       requiresDeposit: pricingDetails.total > 50000,
       depositAmount: pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
     };
+
+    console.log("Generated invoice data for download:", JSON.stringify(invoiceData, null, 2));
 
     // Generate PDF buffer
     const pdfBuffer = await generateOrderInvoicePDF(invoiceData);
@@ -1176,5 +1275,5 @@ module.exports = {
   searchOrders,
   updateOrderStatus,
   sendOrderInvoice,
-   downloadOrderInvoice
+  downloadOrderInvoice
 };
