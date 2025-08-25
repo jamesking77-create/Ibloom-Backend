@@ -128,6 +128,15 @@ const safeParseFloat = (value, defaultValue = 0) => {
 
 // FIXED: Helper function to get item price from various possible fields
 const getItemPrice = (item) => {
+  // First try to get totalPrice if available (for existing orders)
+  if (item.totalPrice !== undefined && item.totalPrice !== null && item.totalPrice !== '') {
+    const totalPrice = safeParseFloat(item.totalPrice);
+    const quantity = safeParseFloat(item.quantity, 1);
+    if (totalPrice > 0 && quantity > 0) {
+      return totalPrice / quantity; // Get unit price from total price
+    }
+  }
+  
   // Try different possible price fields in order of preference
   const priceFields = [
     'pricePerUnit',
@@ -154,22 +163,92 @@ const getItemPrice = (item) => {
 
 // FIXED: Helper function to calculate order total with daily rates - HANDLES NaN VALUES
 const calculateOrderPricing = (order, dailyRate = 0) => {
-  const { items, dateInfo } = order;
-  const { startDate, endDate } = dateInfo;
+  const { items, dateInfo, pricing: existingPricing } = order;
+  
+  // If order already has valid pricing, use it and just add daily charges if needed
+  if (existingPricing && 
+      existingPricing.subtotal !== undefined && 
+      existingPricing.tax !== undefined && 
+      existingPricing.total !== undefined &&
+      !isNaN(existingPricing.subtotal) &&
+      !isNaN(existingPricing.tax) &&
+      !isNaN(existingPricing.total)) {
+    
+    console.log('Using existing pricing from database:', existingPricing);
+    
+    const { startDate, endDate } = dateInfo;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const timeDiff = end.getTime() - start.getTime();
+    const durationInDays = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1);
+    
+    const safeDailyRate = safeParseFloat(dailyRate, 0);
+    const dailyCharges = safeDailyRate * durationInDays;
+    
+    // Use existing pricing but add daily charges if any
+    const itemsSubtotal = safeParseFloat(existingPricing.subtotal, 0);
+    const subtotal = itemsSubtotal + dailyCharges;
+    const tax = subtotal * 0.075; // Recalculate tax on new subtotal
+    const total = subtotal + tax;
+    
+    const result = {
+      itemsSubtotal,
+      dailyCharges,
+      dailyRate: safeDailyRate,
+      durationInDays,
+      subtotal,
+      tax,
+      total,
+      formatted: {
+        itemsSubtotal: formatCurrency(itemsSubtotal),
+        dailyCharges: formatCurrency(dailyCharges),
+        dailyRate: formatCurrency(safeDailyRate),
+        subtotal: formatCurrency(subtotal),
+        tax: formatCurrency(tax),
+        total: formatCurrency(total),
+      }
+    };
+    
+    console.log('Using existing pricing with daily charges added:', result);
+    return result;
+  }
+  
+  // If no existing pricing or invalid pricing, calculate from scratch
+  console.log('Calculating pricing from scratch for order:', {
+    startDate: dateInfo?.startDate,
+    endDate: dateInfo?.endDate,
+    itemsCount: items ? items.length : 0,
+    dailyRate
+  });
+  
+  const { startDate, endDate } = dateInfo || {};
+  
+  if (!startDate || !endDate) {
+    console.error('Missing date information in order');
+    return {
+      itemsSubtotal: 0,
+      dailyCharges: 0,
+      dailyRate: 0,
+      durationInDays: 1,
+      subtotal: 0,
+      tax: 0,
+      total: 0,
+      formatted: {
+        itemsSubtotal: formatCurrency(0),
+        dailyCharges: formatCurrency(0),
+        dailyRate: formatCurrency(0),
+        subtotal: formatCurrency(0),
+        tax: formatCurrency(0),
+        total: formatCurrency(0),
+      }
+    };
+  }
   
   // Calculate rental duration safely
   const start = new Date(startDate);
   const end = new Date(endDate);
   const timeDiff = end.getTime() - start.getTime();
   const durationInDays = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1);
-  
-  console.log('Calculating pricing for order:', {
-    startDate,
-    endDate,
-    durationInDays,
-    itemsCount: items ? items.length : 0,
-    dailyRate
-  });
   
   // Calculate items subtotal with proper error handling
   let itemsSubtotal = 0;
