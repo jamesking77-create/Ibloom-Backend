@@ -16,6 +16,8 @@ const updateProfile = async (req, res) => {
       email,
       name,
       phone,
+      mobile,
+      whatsapp,
       location,
       bio,
       specialize,
@@ -69,6 +71,8 @@ const updateProfile = async (req, res) => {
     if (email !== undefined) updateData.email = email.toLowerCase();
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
+    if (mobile !== undefined) updateData.mobile = mobile;
+    if (whatsapp !== undefined) updateData.whatsapp = whatsapp;
     if (location !== undefined) updateData.location = location;
     if (bio !== undefined) updateData.bio = bio;
     if (specialize !== undefined) updateData.specialize = specialize;
@@ -119,6 +123,8 @@ const updateProfile = async (req, res) => {
           email: updatedUser.email,
           name: updatedUser.name,
           phone: updatedUser.phone,
+          mobile: updatedUser.mobile,
+          whatsapp: updatedUser.whatsapp,
           location: updatedUser.location,
           bio: updatedUser.bio,
           avatar: updatedUser.avatar,
@@ -187,6 +193,8 @@ const getProfile = async (req, res) => {
           email: user.email,
           name: user.name,
           phone: user.phone,
+          mobile: user.mobile,
+          whatsapp: user.whatsapp,
           location: user.location,
           bio: user.bio,
           avatar: user.avatar, 
