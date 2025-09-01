@@ -215,7 +215,7 @@ app.post("/api/bookings/test-websocket", (req, res) => {
 });
 
 
-// In your backend routes
+// UPDATED: Public Company Info API with mobile and whatsapp fields
 app.get('/api/company/info', async (req, res) => {
   try {
     // Get the admin user (assuming only one admin exists)
@@ -228,12 +228,14 @@ app.get('/api/company/info', async (req, res) => {
       });
     }
 
-    // Return only public company information
+    // Return only public company information including new mobile and whatsapp fields
     const companyInfo = {
       name: adminUser.name,
       bio: adminUser.bio,
       location: adminUser.location,
       phone: adminUser.phone,
+      mobile: adminUser.mobile,          // NEW: Mobile number field
+      whatsapp: adminUser.whatsapp,      // NEW: WhatsApp number field
       email: adminUser.email,
       avatar: adminUser.avatar,
       specialize: adminUser.specialize,
@@ -246,9 +248,11 @@ app.get('/api/company/info', async (req, res) => {
       data: { company: companyInfo }
     });
   } catch (error) {
+    console.error('Error fetching company info:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to fetch company information' 
+      message: 'Failed to fetch company information',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -290,6 +294,7 @@ server.listen(PORT, HOST, () => {
   console.log(`📊 WebSocket stats available at: http://${HOST}:${PORT}/api/websocket/stats`);
   console.log(`📝 Quote endpoints available at: http://${HOST}:${PORT}/api/quotes`);
   console.log(`📚 Booking endpoints available at: http://${HOST}:${PORT}/api/bookings`);
+  console.log(`🏢 Company info available at: http://${HOST}:${PORT}/api/company/info`);
   console.log(`🧪 WebSocket tests available at: POST http://${HOST}:${PORT}/api/websocket/test/{module}`);
   
   try {

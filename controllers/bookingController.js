@@ -626,14 +626,14 @@ const deleteBooking = async (req, res) => {
     }
 
     // Optionally send cancellation email to customer
-    if (bookingInfo.customerEmail) {
-      sendBookingDeletionEmail(bookingInfo).catch((emailError) => {
-        console.error(
-          "Failed to send deletion notification email:",
-          emailError
-        );
-      });
-    }
+    // if (bookingInfo.customerEmail) {
+    //   sendBookingDeletionEmail(bookingInfo).catch((emailError) => {
+    //     console.error(
+    //       "Failed to send deletion notification email:",
+    //       emailError
+    //     );
+    //   });
+    // }
 
     res.status(200).json({
       message: "Booking deleted successfully",
