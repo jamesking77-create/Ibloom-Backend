@@ -1,4 +1,4 @@
-// index.js - UPDATED VERSION with Generic WebSocket for All Modules
+// index.js - UPDATED VERSION with Enhanced Category Routes
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -69,29 +69,28 @@ app.get("/health", (req, res) => {
     modules: {
       bookings: { enabled: true, websocketIntegration: true },
       quotes: { enabled: true, websocketIntegration: true },
-      orders: { enabled: false, websocketIntegration: false }
+      orders: { enabled: false, websocketIntegration: false },
+      categories: { enabled: true, autoGenerateIds: true, subcategoriesSupport: true }
     }
   });
 });
 
 // Routes
 const authRoutes = require("./routes/authRoutes");
-const serviceRoutes = require("./routes/serviceRoutes");
+const serviceRoutes = require("./routes/serviceRoutes"); // Updated with subcategory routes
 const userRoutes = require("./routes/userRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
 const quoteRoutes = require("./routes/quoteRoutes");
 
-
 app.use("/api/auth", authRoutes);
-app.use("/api/services", serviceRoutes);
+app.use("/api/services", serviceRoutes); // Now includes subcategory endpoints
 app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/mailer", mailRoutes);
 app.use("/api/quotes", quoteRoutes);
-
 
 // WebSocket stats endpoint - ENHANCED for all modules
 app.get("/api/websocket/stats", (req, res) => {
@@ -101,8 +100,8 @@ app.get("/api/websocket/stats", (req, res) => {
       success: true,
       stats: {
         ...stats,
-        supportedModules: ['bookings', 'quotes', 'orders'],
-        activeModules: ['bookings', 'quotes']
+        supportedModules: ['bookings', 'quotes', 'orders', 'categories'],
+        activeModules: ['bookings', 'quotes', 'categories']
       },
       timestamp: new Date().toISOString()
     });
@@ -119,7 +118,7 @@ app.get("/api/websocket/stats", (req, res) => {
 app.post("/api/websocket/test/:module", (req, res) => {
   try {
     const { module } = req.params;
-    const validModules = ['bookings', 'quotes', 'orders'];
+    const validModules = ['bookings', 'quotes', 'orders', 'categories'];
     
     if (!validModules.includes(module)) {
       return res.status(400).json({
@@ -150,7 +149,6 @@ app.post("/api/websocket/test/:module", (req, res) => {
     });
   }
 });
-
 
 // Specific test endpoints for backward compatibility
 app.post("/api/quotes/test-websocket", (req, res) => {
@@ -213,7 +211,6 @@ app.post("/api/bookings/test-websocket", (req, res) => {
     });
   }
 });
-
 
 // UPDATED: Public Company Info API with mobile and whatsapp fields
 app.get('/api/company/info', async (req, res) => {
@@ -295,13 +292,15 @@ server.listen(PORT, HOST, () => {
   console.log(`📝 Quote endpoints available at: http://${HOST}:${PORT}/api/quotes`);
   console.log(`📚 Booking endpoints available at: http://${HOST}:${PORT}/api/bookings`);
   console.log(`🏢 Company info available at: http://${HOST}:${PORT}/api/company/info`);
+  console.log(`🔧 Category endpoints available at: http://${HOST}:${PORT}/api/services/categories`);
+  console.log(`📁 SubCategory endpoints available at: http://${HOST}:${PORT}/api/services/categories/:categoryId/subcategories`);
   console.log(`🧪 WebSocket tests available at: POST http://${HOST}:${PORT}/api/websocket/test/{module}`);
   
   try {
     console.log("🔌 Initializing Generic WebSocket server...");
     genericWebSocketServer.initialize(server);
     console.log(`✅ Generic WebSocket server initialized at: ws://${HOST}:${PORT}/websocket`);
-    console.log(`📡 WebSocket supports modules: bookings, quotes, orders`);
+    console.log(`📡 WebSocket supports modules: bookings, quotes, orders, categories`);
     console.log(`📱 Clients can subscribe to specific modules for targeted notifications`);
   } catch (error) {
     console.error('❌ Failed to initialize WebSocket server:', error);
