@@ -75,6 +75,56 @@ app.get("/health", (req, res) => {
   });
 });
 
+
+const startKeepAlivePing = () => {
+  // Get the Render URL from environment or use a fallback
+  const serverUrl = process.env.RENDER_EXTERNAL_URL || 
+                    process.env.SERVER_URL || 
+                    `http://localhost:${process.env.PORT || 5000}`;
+  
+  console.log('🔄 Starting keep-alive self-ping service...');
+  console.log(`📍 Will ping: ${serverUrl}/api/keep-alive every 10 minutes`);
+  
+  // Initial ping after 30 seconds to ensure server is fully started
+  setTimeout(async () => {
+    try {
+      const response = await fetch(`${serverUrl}/api/keep-alive`);
+      const data = await response.json();
+      console.log('✅ Initial keep-alive ping successful:', data);
+    } catch (error) {
+      console.error('❌ Initial keep-alive ping failed:', error.message);
+    }
+  }, 30000); // 30 seconds delay for initial ping
+  
+  // Set up recurring ping every 10 minutes
+  const pingInterval = setInterval(async () => {
+    try {
+      const startTime = Date.now();
+      const response = await fetch(`${serverUrl}/api/keep-alive`);
+      const data = await response.json();
+      const responseTime = Date.now() - startTime;
+      
+      console.log(`✅ Keep-alive ping successful at ${new Date().toISOString()}`);
+      console.log(`   Response time: ${responseTime}ms | Server uptime: ${Math.floor(data.uptime / 60)} minutes`);
+    } catch (error) {
+      console.error(`❌ Keep-alive ping failed at ${new Date().toISOString()}:`, error.message);
+      
+      // If we get too many failures, you might want to alert yourself
+      // You could integrate with a logging service here
+    }
+  }, 10 * 60 * 1000); // 10 minutes in milliseconds
+  
+  // Clean up on shutdown
+  process.on('SIGTERM', () => clearInterval(pingInterval));
+  process.on('SIGINT', () => clearInterval(pingInterval));
+  
+  return pingInterval;
+};
+
+
+
+
+
 // Routes
 const authRoutes = require("./routes/authRoutes");
 const serviceRoutes = require("./routes/serviceRoutes"); // Updated with subcategory routes
@@ -255,11 +305,24 @@ app.get('/api/company/info', async (req, res) => {
 });
 
 app.get('/api/keep-alive', (req, res) => {
-  console.log('🏓 Keep-alive ping received at:', new Date().toISOString());
+  const now = new Date().toISOString();
+  const uptimeMinutes = Math.floor(process.uptime() / 60);
+  const uptimeHours = Math.floor(uptimeMinutes / 60);
+  const remainingMinutes = uptimeMinutes % 60;
+  
+  console.log(`🏓 Keep-alive ping received at: ${now}`);
+  console.log(`   Server uptime: ${uptimeHours}h ${remainingMinutes}m`);
+  console.log(`   Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+  
   res.status(200).json({
     message: "i am active",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    timestamp: now,
+    uptime: process.uptime(),
+    uptimeFormatted: `${uptimeHours}h ${remainingMinutes}m`,
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      unit: 'MB'
+    }
   });
 });
 
@@ -306,6 +369,13 @@ server.listen(PORT, HOST, () => {
     console.error('❌ Failed to initialize WebSocket server:', error);
     console.error('Error details:', error.message);
     console.error('Stack:', error.stack);
+  }
+  
+  // START THE KEEP-ALIVE PING SERVICE
+  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_KEEP_ALIVE === 'true') {
+    startKeepAlivePing();
+  } else {
+    console.log('ℹ️ Keep-alive ping disabled in development. Set ENABLE_KEEP_ALIVE=true to enable.');
   }
 });
 
