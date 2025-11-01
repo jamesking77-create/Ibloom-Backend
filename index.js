@@ -4,6 +4,7 @@ const cors = require("cors");
 const http = require("http");
 require("dotenv").config();
 const User = require("./models/User");
+const galleryRoutes = require("./routes/galleryRoutes");
 
 // Import database connection
 require("./config/database");
@@ -74,6 +75,8 @@ app.get("/health", (req, res) => {
     }
   });
 });
+
+app.use("/api/gallery", galleryRoutes);
 
 
 const startKeepAlivePing = () => {
