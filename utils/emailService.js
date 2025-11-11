@@ -2,16 +2,20 @@ const nodemailer = require("nodemailer");
 
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
+  service: 'gmail', // or your provider
   host: 'smtp.gmail.com',
-  port: 587, // Changed from 465
-  secure: false, // Changed from true
+  port: 587,
+  secure: false, // Use TLS
   auth: {
-    user: process.env.EMAIL_USER, // jamesasuelimen77@gmail.com
-    pass: process.env.EMAIL_PASSWORD, // Your Gmail App Password
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
   },
-  tls: {
-    rejectUnauthorized: true
-  }
+  connectionTimeout: 10000,    // 10 seconds
+  greetingTimeout: 10000,      // 10 seconds  
+  socketTimeout: 20000,        // 20 seconds
+  pool: true,                  // Use connection pooling
+  maxConnections: 1,           // Limit connections
+  maxMessages: 3               // Limit messages per connection
 });
 
 // Function to send password reset email
