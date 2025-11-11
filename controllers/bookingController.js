@@ -10,10 +10,13 @@ const bookingWebSocketServer = require("../webSocket/genericWebSocket");
 // Email configuration
 const transporter = nodemailer.createTransport({
   service: "gmail",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  connectionTimeout: 10000,
 });
 
 // Admin notification email addresses

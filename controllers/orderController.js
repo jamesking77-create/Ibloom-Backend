@@ -8,13 +8,15 @@ const path = require("path");
 // Import Generic WebSocket server - will be available globally
 const genericWebSocketServer = require("../webSocket/genericWebSocket");
 
-// Email configuration
 const transporter = nodemailer.createTransport({
   service: "gmail",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  connectionTimeout: 10000,
 });
 
 // FIXED: Helper function to get logo - supports both URL and local paths
