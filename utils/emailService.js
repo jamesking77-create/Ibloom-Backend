@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: 'smtp.gmail.com', // Add explicit host
   port: 465,
   secure: true,
   auth: {
@@ -10,6 +10,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD,
   },
   connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 // Function to send password reset email

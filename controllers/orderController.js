@@ -9,7 +9,7 @@ const path = require("path");
 const genericWebSocketServer = require("../webSocket/genericWebSocket");
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: 'smtp.gmail.com', // Add explicit host
   port: 465,
   secure: true,
   auth: {
@@ -17,6 +17,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD,
   },
   connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 // FIXED: Helper function to get logo - supports both URL and local paths
