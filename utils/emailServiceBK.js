@@ -2,12 +2,16 @@ const nodemailer = require("nodemailer");
 
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
-  service: "gmail",
-  secure: false,
+  host: 'smtp.gmail.com',
+  port: 587, // Changed from 465
+  secure: false, // Changed from true
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    user: process.env.EMAIL_USER, // jamesasuelimen77@gmail.com
+    pass: process.env.EMAIL_PASSWORD, // Your Gmail App Password
   },
+  tls: {
+    rejectUnauthorized: true
+  }
 });
 
 // Function to send password reset email

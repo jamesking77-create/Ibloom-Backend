@@ -9,20 +9,20 @@ const bookingWebSocketServer = require("../webSocket/genericWebSocket");
 
 // Email configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com', // Add explicit host
-  port: 465,
-  secure: true,
+  host: 'smtp.gmail.com',
+  port: 587, // Changed from 465
+  secure: false, // Changed from true
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    user: process.env.EMAIL_USER, // jamesasuelimen77@gmail.com
+    pass: process.env.EMAIL_PASSWORD, // Your Gmail App Password
   },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000
+  tls: {
+    rejectUnauthorized: true
+  }
 });
 
 // Admin notification email addresses
-const ADMIN_EMAILS = [process.env.ADMIN_EMAIL || "admin@youreventcompany.com"];
+const ADMIN_EMAILS = [process.env.ADMIN_EMAIL || "admin@ibloomrentals.com"];
 
 // FIXED: Helper function to get logo - supports both URL and local paths
 const getLogoBase64 = async () => {
