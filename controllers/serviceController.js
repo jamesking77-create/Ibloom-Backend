@@ -77,6 +77,29 @@ const processItemImages = async (req, folder = "categories/items") => {
   return images;
 };
 
+const findItemAnywhere = (category, itemId) => {
+  const numericItemId = parseInt(itemId, 10);
+
+  // Check top-level items
+  let item = category.items?.find((i) => parseInt(i.id, 10) === numericItemId);
+  if (item) return item;
+
+  // Check inside subCategories
+  for (const sub of category.subCategories || []) {
+    item = sub.items?.find((i) => parseInt(i.id, 10) === numericItemId);
+    if (item) return item;
+  }
+
+  return null;
+};
+
+
+
+
+
+
+
+
 const getCategories = async (req, res) => {
   try {
     const categories = await Category.find().sort({ id: 1 });
@@ -126,6 +149,61 @@ const getCategoryById = async (req, res) => {
     });
   }
 };
+
+const shareItem = async (req, res) => {
+  try {
+    const { categoryId, itemId } = req.params;
+    const numericCategoryId = parseInt(categoryId, 10);
+
+    const category = await Category.findOne({ id: numericCategoryId });
+    if (!category) return res.status(404).send("Item not found");
+
+    const item = findItemAnywhere(category, itemId);
+    if (!item) return res.status(404).send("Item not found");
+
+    const image =
+      item.images?.image1 ||
+      item.image ||
+      "https://ibloomrentals.com/default-og.jpg";
+
+    const price = item.price ? `₦${item.price}` : "";
+    const description = (item.description || "").slice(0, 160).replace(/"/g, "&quot;");
+    const safeName = item.name.replace(/"/g, "&quot;");
+
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://ibloomrentals.com";
+
+const redirectUrl = `${FRONTEND_URL}/category/${numericCategoryId}?item=${item.id}`;
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${safeName}</title>
+          <meta property="og:title" content="${safeName}" />
+          <meta property="og:description" content="${description} - ${price}" />
+          <meta property="og:image" content="${image}" />
+          <meta property="og:type" content="product" />
+          <meta property="og:url" content="https://ibloomrentals.com/share/${numericCategoryId}/${item.id}" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta http-equiv="refresh" content="0; url=${redirectUrl}" />
+          <script>window.location.replace("${redirectUrl}");</script>
+        </head>
+        <body>
+          <p>Redirecting to ${safeName}...</p>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Share item error:", error);
+    res.status(500).send("Server error");
+  }
+};
+module.exports = { getCategories, shareItem }; 
+
+
+
+
 
 const createCategory = async (req, res) => {
   try {
@@ -1096,4 +1174,5 @@ module.exports = {
   createItem,
   updateItem,
   deleteItem,
+  shareItem,
 };

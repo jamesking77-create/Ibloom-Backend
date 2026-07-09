@@ -136,9 +136,11 @@ const orderRoutes = require("./routes/orderRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const mailRoutes = require("./routes/mailRoutes");
 const quoteRoutes = require("./routes/quoteRoutes");
+const { shareItem } = require("./controllers/serviceController");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes); // Now includes subcategory endpoints
+app.get("/share/:categoryId/:itemId", shareItem); // New route for sharing items
 app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);
