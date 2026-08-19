@@ -9,20 +9,20 @@ const bookingWebSocketServer = require("../webSocket/genericWebSocket");
 
 // Email configuration
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // or your provider
-  host: 'smtp.gmail.com',
+  service: "gmail", // or your provider
+  host: "smtp.gmail.com",
   port: 587,
   secure: false, // Use TLS
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    pass: process.env.SMTP_PASS,
   },
-  connectionTimeout: 10000,    // 10 seconds
-  greetingTimeout: 10000,      // 10 seconds  
-  socketTimeout: 20000,        // 20 seconds
-  pool: true,                  // Use connection pooling
-  maxConnections: 1,           // Limit connections
-  maxMessages: 3               // Limit messages per connection
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000, // 10 seconds
+  socketTimeout: 20000, // 20 seconds
+  pool: true, // Use connection pooling
+  maxConnections: 1, // Limit connections
+  maxMessages: 3, // Limit messages per connection
 });
 
 // Admin notification email addresses
@@ -33,13 +33,13 @@ const getLogoBase64 = async () => {
   // Option 1: Try Cloudinary URL first (RECOMMENDED)
   const CLOUDINARY_LOGO_URL =
     process.env.CLOUDINARY_LOGO_URL ||
-    "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/ibloomcut.png";
+    "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/newiblooms.png";
 
   try {
     if (CLOUDINARY_LOGO_URL && CLOUDINARY_LOGO_URL.startsWith("http")) {
       console.log(
         "Trying to load logo from Cloudinary URL:",
-        CLOUDINARY_LOGO_URL
+        CLOUDINARY_LOGO_URL,
       );
       const https = require("https");
       const http = require("http");
@@ -57,14 +57,14 @@ const getLogoBase64 = async () => {
                 console.log(
                   "Logo loaded successfully from Cloudinary, size:",
                   buffer.length,
-                  "bytes"
+                  "bytes",
                 );
                 resolve(`data:image/png;base64,${buffer.toString("base64")}`);
               });
             } else {
               console.log(
                 "Failed to load from Cloudinary, status:",
-                response.statusCode
+                response.statusCode,
               );
               resolve(tryLocalLogoPaths()); // Fallback to local
             }
@@ -86,12 +86,12 @@ const getLogoBase64 = async () => {
 // Helper function to try local logo paths
 const tryLocalLogoPaths = () => {
   const possiblePaths = [
-    path.join(__dirname, "../../assets/ibloomcut.png"),
-    path.join(__dirname, "../assets/ibloomcut.png"),
-    path.join(__dirname, "../../public/assets/ibloomcut.png"),
-    path.join(__dirname, "../public/assets/ibloomcut.png"),
-    path.join(process.cwd(), "assets/ibloomcut.png"),
-    path.join(process.cwd(), "public/assets/ibloomcut.png"),
+    path.join(__dirname, "../../assets/newiblooms.png"),
+    path.join(__dirname, "../assets/newiblooms.png"),
+    path.join(__dirname, "../../public/assets/newiblooms.png"),
+    path.join(__dirname, "../public/assets/newiblooms.png"),
+    path.join(process.cwd(), "assets/newiblooms.png"),
+    path.join(process.cwd(), "public/assets/newiblooms.png"),
   ];
 
   for (const logoPath of possiblePaths) {
@@ -104,7 +104,7 @@ const tryLocalLogoPaths = () => {
         console.log(
           "Logo loaded successfully from local path, size:",
           logoBuffer.length,
-          "bytes"
+          "bytes",
         );
         return `data:image/png;base64,${logoBuffer.toString("base64")}`;
       }
@@ -161,10 +161,10 @@ const getBookings = async (req, res) => {
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const thisWeekBookings = bookings.filter(
-      (b) => new Date(b.createdAt) >= oneWeekAgo
+      (b) => new Date(b.createdAt) >= oneWeekAgo,
     );
     const thisMonthBookings = bookings.filter(
-      (b) => new Date(b.createdAt) >= oneMonthAgo
+      (b) => new Date(b.createdAt) >= oneMonthAgo,
     );
 
     const totalRevenue = bookings
@@ -196,7 +196,7 @@ const createBooking = async (req, res) => {
   try {
     console.log(
       "Creating booking with data:",
-      JSON.stringify(req.body, null, 2)
+      JSON.stringify(req.body, null, 2),
     );
 
     if (!req.body || Object.keys(req.body).length === 0) {
@@ -240,14 +240,14 @@ const createBooking = async (req, res) => {
     if (pricing) {
       const calculatedPricing = calculateFormattedPricing(
         pricing.itemsSubtotal || 0,
-        pricing.taxRate || 0.075
+        pricing.taxRate || 0.075,
       );
       req.body.pricing = {
         ...pricing,
         ...calculatedPricing,
         totalItems: services.reduce(
           (sum, service) => sum + service.quantity,
-          0
+          0,
         ),
         totalServices: services.length,
         currency: pricing.currency || "NGN",
@@ -282,7 +282,7 @@ const createBooking = async (req, res) => {
       bookingWebSocketServer.emitNewBooking(booking);
       console.log(
         "✅ WebSocket notification sent for new booking:",
-        booking.bookingId
+        booking.bookingId,
       );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
@@ -337,7 +337,7 @@ const updateBookingStatus = async (req, res) => {
 
     if (
       !["pending_confirmation", "confirmed", "cancelled", "pending"].includes(
-        status
+        status,
       )
     ) {
       return res.status(400).json({ message: "Invalid status value" });
@@ -353,7 +353,7 @@ const updateBookingStatus = async (req, res) => {
     await booking.save();
 
     console.log(
-      `Booking ${booking.bookingId} status updated from ${oldStatus} to ${status}`
+      `Booking ${booking.bookingId} status updated from ${oldStatus} to ${status}`,
     );
 
     // 🔔 EMIT WEBSOCKET NOTIFICATION FOR STATUS UPDATE
@@ -362,11 +362,11 @@ const updateBookingStatus = async (req, res) => {
         booking._id,
         oldStatus,
         status,
-        booking
+        booking,
       );
       console.log(
         "✅ WebSocket notification sent for status update:",
-        booking.bookingId
+        booking.bookingId,
       );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
@@ -407,7 +407,7 @@ const updateBookingPayment = async (req, res) => {
     await booking.save();
 
     console.log(
-      `Booking ${booking.bookingId} payment updated: ${paymentStatus}, amount: ${amountPaid}`
+      `Booking ${booking.bookingId} payment updated: ${paymentStatus}, amount: ${amountPaid}`,
     );
 
     res.status(200).json({
@@ -440,7 +440,7 @@ const updateBookingItems = async (req, res) => {
       // Recalculate pricing
       const itemsSubtotal = services.reduce(
         (sum, service) => sum + service.subtotal,
-        0
+        0,
       );
       const calculatedPricing = calculateFormattedPricing(itemsSubtotal);
 
@@ -449,7 +449,7 @@ const updateBookingItems = async (req, res) => {
         ...calculatedPricing,
         totalItems: services.reduce(
           (sum, service) => sum + service.quantity,
-          0
+          0,
         ),
         totalServices: services.length,
       };
@@ -526,7 +526,7 @@ const generateInvoice = async (req, res) => {
     }
 
     console.log(
-      `Invoice ${invoiceNumber} generated and sent for booking ${booking.bookingId}`
+      `Invoice ${invoiceNumber} generated and sent for booking ${booking.bookingId}`,
     );
 
     res.status(200).json({
@@ -565,7 +565,7 @@ const sendInvoiceByEmail = async (req, res) => {
       customerEmail,
       customerName,
       invoiceData,
-      pdfBuffer
+      pdfBuffer,
     );
 
     // Optionally update booking record if bookingId is provided
@@ -579,7 +579,7 @@ const sendInvoiceByEmail = async (req, res) => {
           booking.lastInvoiceUpdate = new Date();
           await booking.save();
           console.log(
-            `Updated booking ${invoiceData.bookingId} with invoice info`
+            `Updated booking ${invoiceData.bookingId} with invoice info`,
           );
         }
       } catch (updateError) {
@@ -627,7 +627,7 @@ const deleteBooking = async (req, res) => {
       bookingWebSocketServer.emitBookingDeletion(booking._id, bookingInfo);
       console.log(
         "✅ WebSocket notification sent for booking deletion:",
-        bookingInfo.bookingId
+        bookingInfo.bookingId,
       );
     } catch (wsError) {
       console.error("❌ Failed to send WebSocket notification:", wsError);
@@ -705,26 +705,26 @@ const generatePDFContent = async (doc, invoiceData) => {
     .text(
       `Issue Date: ${new Date(invoiceData.issueDate).toLocaleDateString()}`,
       pageWidth - 220,
-      headerY + 12
+      headerY + 12,
     )
     .text(
       `Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}`,
       pageWidth - 220,
-      headerY + 24
+      headerY + 24,
     );
 
   // FIXED: Company logo with URL support - fetch image for PDF use
   const logoOptions = {
     cloudinaryUrl:
       process.env.CLOUDINARY_LOGO_URL ||
-      "https://res.cloudinary.com/dc7jgb30v/image/upload/v1754220509/ibloomcut_mlsrwt.png",
+      "https://res.cloudinary.com/dc7jgb30v/image/upload/v1754220509/newiblooms_mlsrwt.png",
     localPaths: [
-      path.join(__dirname, "../../assets/ibloomcut.png"),
-      path.join(__dirname, "../assets/ibloomcut.png"),
-      path.join(__dirname, "../../public/assets/ibloomcut.png"),
-      path.join(__dirname, "../public/assets/ibloomcut.png"),
-      path.join(process.cwd(), "assets/ibloomcut.png"),
-      path.join(process.cwd(), "public/assets/ibloomcut.png"),
+      path.join(__dirname, "../../assets/newiblooms.png"),
+      path.join(__dirname, "../assets/newiblooms.png"),
+      path.join(__dirname, "../../public/assets/newiblooms.png"),
+      path.join(__dirname, "../public/assets/newiblooms.png"),
+      path.join(process.cwd(), "assets/newiblooms.png"),
+      path.join(process.cwd(), "public/assets/newiblooms.png"),
     ],
   };
 
@@ -738,7 +738,7 @@ const generatePDFContent = async (doc, invoiceData) => {
     try {
       console.log(
         "Fetching logo from Cloudinary for PDF:",
-        logoOptions.cloudinaryUrl
+        logoOptions.cloudinaryUrl,
       );
       const https = require("https");
       const http = require("http");
@@ -766,7 +766,7 @@ const generatePDFContent = async (doc, invoiceData) => {
                   console.log(
                     "Logo added to PDF from Cloudinary buffer, size:",
                     logoBuffer.length,
-                    "bytes"
+                    "bytes",
                   );
                   resolve();
                 } catch (error) {
@@ -777,7 +777,7 @@ const generatePDFContent = async (doc, invoiceData) => {
             } else {
               console.log(
                 "Failed to fetch logo from Cloudinary, status:",
-                response.statusCode
+                response.statusCode,
               );
               resolve(); // Continue to fallback
             }
@@ -845,7 +845,7 @@ const generatePDFContent = async (doc, invoiceData) => {
     .text(
       `${invoiceData.company.city}, ${invoiceData.company.state}`,
       margin,
-      currentY + 42
+      currentY + 42,
     )
     .text(invoiceData.company.country, margin, currentY + 54)
     .text(invoiceData.company.phone, margin, currentY + 66)
@@ -894,7 +894,7 @@ const generatePDFContent = async (doc, invoiceData) => {
     .text(
       `Date: ${new Date(invoiceData.event.date).toLocaleDateString()}`,
       eventCol2,
-      eventY
+      eventY,
     )
     .text(`Time: ${invoiceData.event.time}`, eventCol1, eventY + 12)
     .text(`Guests: ${invoiceData.event.guests}`, eventCol2, eventY + 12)
@@ -927,7 +927,7 @@ const generatePDFContent = async (doc, invoiceData) => {
           })}`,
           pageWidth - 120,
           currentY,
-          { align: "right" }
+          { align: "right" },
         );
 
       if (service.description) {
@@ -1000,7 +1000,7 @@ const generatePDFContent = async (doc, invoiceData) => {
         "Delivery and setup prices will be added and negotiated separately.",
         margin + 10,
         currentY + 18,
-        { width: pageWidth - 2 * margin - 20 }
+        { width: pageWidth - 2 * margin - 20 },
       );
 
     currentY += 40; // Reduced from 60
@@ -1027,12 +1027,12 @@ const generatePDFContent = async (doc, invoiceData) => {
       })}`,
       totalsX + 130,
       totalsY,
-      { align: "right" }
+      { align: "right" },
     )
     .text(
       `Tax (${((invoiceData.taxRate || 0.075) * 100).toFixed(1)}%):`,
       totalsX,
-      totalsY + 15
+      totalsY + 15,
     )
     .text(
       `₦${(invoiceData.tax || 0).toLocaleString("en-NG", {
@@ -1040,7 +1040,7 @@ const generatePDFContent = async (doc, invoiceData) => {
       })}`,
       totalsX + 130,
       totalsY + 15,
-      { align: "right" }
+      { align: "right" },
     );
 
   // Total line
@@ -1062,7 +1062,7 @@ const generatePDFContent = async (doc, invoiceData) => {
       })}`,
       totalsX + 130,
       totalsY + 35,
-      { align: "right" }
+      { align: "right" },
     );
 
   // Deposit info if required
@@ -1078,7 +1078,7 @@ const generatePDFContent = async (doc, invoiceData) => {
         })}`,
         totalsX + 130,
         totalsY + 55,
-        { align: "right" }
+        { align: "right" },
       );
   }
 
@@ -1107,17 +1107,17 @@ const generatePDFContent = async (doc, invoiceData) => {
       .text(
         `Bank: ${invoiceData.company.bankDetails.bankName}`,
         margin + 10,
-        bankY + 22
+        bankY + 22,
       )
       .text(
         `Account: ${invoiceData.company.bankDetails.accountName}`,
         margin + 10,
-        bankY + 34
+        bankY + 34,
       )
       .text(
         `Number: ${invoiceData.company.bankDetails.accountNumber}`,
         margin + 10,
-        bankY + 46
+        bankY + 46,
       )
       .text(`Reference: ${invoiceData.invoiceNumber}`, margin + 10, bankY + 58);
 
@@ -1125,7 +1125,7 @@ const generatePDFContent = async (doc, invoiceData) => {
       doc.text(
         `Sort Code: ${invoiceData.company.bankDetails.sortCode}`,
         margin + 10,
-        bankY + 70
+        bankY + 70,
       );
     }
   }
@@ -1150,7 +1150,7 @@ const generatePDFContent = async (doc, invoiceData) => {
       `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
       margin,
       currentY + 15,
-      { align: "center", width: pageWidth - 2 * margin }
+      { align: "center", width: pageWidth - 2 * margin },
     );
 };
 
@@ -1159,7 +1159,7 @@ const sendInvoiceEmailWithPDF = async (
   customerEmail,
   customerName,
   invoiceData,
-  pdfBuffer
+  pdfBuffer,
 ) => {
   const logoBase64 = await getLogoBase64(); // Now async
 
@@ -1208,10 +1208,10 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
           return `
             <tr style="border-bottom: 1px solid #E5E7EB;">
               <td style="padding: 8px 0; font-weight: bold;">${service.name}${
-            service.required
-              ? ' <span style="color: #EA580C;">(Required)</span>'
-              : ""
-          }</td>
+                service.required
+                  ? ' <span style="color: #EA580C;">(Required)</span>'
+                  : ""
+              }</td>
               <td style="padding: 8px 0; text-align: right; color: ${statusColor}; font-weight: bold;">${statusIcon} ${statusText}</td>
             </tr>
           `;
@@ -1273,13 +1273,13 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Issue Date:</td>
             <td style="padding: 12px 0;">${new Date(
-              invoiceData.issueDate
+              invoiceData.issueDate,
             ).toLocaleDateString()}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Due Date:</td>
             <td style="padding: 12px 0; color: #DC2626; font-weight: bold;">${new Date(
-              invoiceData.dueDate
+              invoiceData.dueDate,
             ).toLocaleDateString()}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
@@ -1289,7 +1289,7 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Event Date:</td>
             <td style="padding: 12px 0;">${new Date(
-              invoiceData.event.date
+              invoiceData.event.date,
             ).toLocaleDateString()}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
@@ -1385,7 +1385,7 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
         <h3 style="color: #DC2626; margin-top: 0;">⚠️ Important Notes</h3>
         <ul style="color: #7F1D1D; padding-left: 20px; margin: 0;">
           <li style="margin-bottom: 8px;">Payment is due by <strong>${new Date(
-            invoiceData.dueDate
+            invoiceData.dueDate,
           ).toLocaleDateString()}</strong></li>
           <li style="margin-bottom: 8px;">Late payments may incur additional fees</li>
           ${
@@ -1499,10 +1499,10 @@ const sendBookingConfirmationEmail = async (booking) => {
         service.quantity
       }</td>
       <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; text-align: right;">${formatCurrency(
-        service.subtotal
+        service.subtotal,
       )}</td>
     </tr>
-  `
+  `,
     )
     .join("");
 
@@ -1551,7 +1551,7 @@ const sendBookingConfirmationEmail = async (booking) => {
             <tr>
               <td style="padding: 8px 0; font-weight: bold; color: #6B7280;">Date & Time:</td>
               <td style="padding: 8px 0;">${formatDateTimeRange(
-                booking.eventSchedule
+                booking.eventSchedule,
               )}</td>
             </tr>
             <tr>
@@ -1744,7 +1744,7 @@ const sendBookingDeletionEmail = async (bookingInfo) => {
 
   await transporter.sendMail(mailOptions);
   console.log(
-    `Deletion notification email sent to: ${bookingInfo.customerEmail}`
+    `Deletion notification email sent to: ${bookingInfo.customerEmail}`,
   );
 };
 
@@ -1791,7 +1791,7 @@ const getBookingEmails = async (req, res) => {
       // status: { $in: ['confirmed', 'pending', 'pending_confirmation'] }
     })
       .select(
-        "_id bookingId customerName email eventType customer eventSchedule status createdAt"
+        "_id bookingId customerName email eventType customer eventSchedule status createdAt",
       )
       .sort({ createdAt: -1 }) // Sort by newest first
       .lean(); // Use lean for better performance
@@ -1839,7 +1839,7 @@ const getBookingEmails = async (req, res) => {
       (item) =>
         item.email &&
         item.email !== "no-email@example.com" &&
-        item.email.includes("@")
+        item.email.includes("@"),
     );
 
     // Calculate some basic stats for the mailer dashboard
@@ -1848,10 +1848,10 @@ const getBookingEmails = async (req, res) => {
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const thisWeekBookings = bookings.filter(
-      (b) => new Date(b.createdAt) >= oneWeekAgo
+      (b) => new Date(b.createdAt) >= oneWeekAgo,
     );
     const thisMonthBookings = bookings.filter(
-      (b) => new Date(b.createdAt) >= oneMonthAgo
+      (b) => new Date(b.createdAt) >= oneMonthAgo,
     );
 
     const stats = {

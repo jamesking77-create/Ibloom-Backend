@@ -1,5 +1,5 @@
 // controllers/orderController.js - COMPLETE ORDERS CONTROLLER WITH WEBSOCKET AND INVOICE SUPPORT - FIXED NaN ISSUE
-const Order = require('../models/Order');
+const Order = require("../models/Order");
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
@@ -9,20 +9,20 @@ const path = require("path");
 const genericWebSocketServer = require("../webSocket/genericWebSocket");
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // or your provider
-  host: 'smtp.gmail.com',
+  service: "gmail", // or your provider
+  host: "smtp.gmail.com",
   port: 587,
   secure: false, // Use TLS
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    pass: process.env.SMTP_PASS,
   },
-  connectionTimeout: 10000,    // 10 seconds
-  greetingTimeout: 10000,      // 10 seconds  
-  socketTimeout: 20000,        // 20 seconds
-  pool: true,                  // Use connection pooling
-  maxConnections: 1,           // Limit connections
-  maxMessages: 3               // Limit messages per connection
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000, // 10 seconds
+  socketTimeout: 20000, // 20 seconds
+  pool: true, // Use connection pooling
+  maxConnections: 1, // Limit connections
+  maxMessages: 3, // Limit messages per connection
 });
 
 // FIXED: Helper function to get logo - supports both URL and local paths
@@ -30,13 +30,13 @@ const getLogoBase64 = async () => {
   // Option 1: Try Cloudinary URL first (RECOMMENDED)
   const CLOUDINARY_LOGO_URL =
     process.env.CLOUDINARY_LOGO_URL ||
-    "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/ibloomcut.png";
+    "https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/newiblooms.png";
 
   try {
     if (CLOUDINARY_LOGO_URL && CLOUDINARY_LOGO_URL.startsWith("http")) {
       console.log(
         "Trying to load logo from Cloudinary URL:",
-        CLOUDINARY_LOGO_URL
+        CLOUDINARY_LOGO_URL,
       );
       const https = require("https");
       const http = require("http");
@@ -54,14 +54,14 @@ const getLogoBase64 = async () => {
                 console.log(
                   "Logo loaded successfully from Cloudinary, size:",
                   buffer.length,
-                  "bytes"
+                  "bytes",
                 );
                 resolve(`data:image/png;base64,${buffer.toString("base64")}`);
               });
             } else {
               console.log(
                 "Failed to load from Cloudinary, status:",
-                response.statusCode
+                response.statusCode,
               );
               resolve(tryLocalLogoPaths()); // Fallback to local
             }
@@ -83,12 +83,12 @@ const getLogoBase64 = async () => {
 // Helper function to try local logo paths
 const tryLocalLogoPaths = () => {
   const possiblePaths = [
-    path.join(__dirname, "../../assets/ibloomcut.png"),
-    path.join(__dirname, "../assets/ibloomcut.png"),
-    path.join(__dirname, "../../public/assets/ibloomcut.png"),
-    path.join(__dirname, "../public/assets/ibloomcut.png"),
-    path.join(process.cwd(), "assets/ibloomcut.png"),
-    path.join(process.cwd(), "public/assets/ibloomcut.png"),
+    path.join(__dirname, "../../assets/newiblooms.png"),
+    path.join(__dirname, "../assets/newiblooms.png"),
+    path.join(__dirname, "../../public/assets/newiblooms.png"),
+    path.join(__dirname, "../public/assets/newiblooms.png"),
+    path.join(process.cwd(), "assets/newiblooms.png"),
+    path.join(process.cwd(), "public/assets/newiblooms.png"),
   ];
 
   for (const logoPath of possiblePaths) {
@@ -101,7 +101,7 @@ const tryLocalLogoPaths = () => {
         console.log(
           "Logo loaded successfully from local path, size:",
           logoBuffer.length,
-          "bytes"
+          "bytes",
         );
         return `data:image/png;base64,${logoBuffer.toString("base64")}`;
       }
@@ -127,7 +127,7 @@ const formatCurrency = (amount) => {
 
 // FIXED: Helper function to safely parse float values
 const safeParseFloat = (value, defaultValue = 0) => {
-  if (value === null || value === undefined || value === '') {
+  if (value === null || value === undefined || value === "") {
     return defaultValue;
   }
   const parsed = parseFloat(value);
@@ -137,68 +137,83 @@ const safeParseFloat = (value, defaultValue = 0) => {
 // FIXED: Helper function to get item price from various possible fields
 const getItemPrice = (item) => {
   // First try to get totalPrice if available (for existing orders)
-  if (item.totalPrice !== undefined && item.totalPrice !== null && item.totalPrice !== '') {
+  if (
+    item.totalPrice !== undefined &&
+    item.totalPrice !== null &&
+    item.totalPrice !== ""
+  ) {
     const totalPrice = safeParseFloat(item.totalPrice);
     const quantity = safeParseFloat(item.quantity, 1);
     if (totalPrice > 0 && quantity > 0) {
       return totalPrice / quantity; // Get unit price from total price
     }
   }
-  
+
   // Try different possible price fields in order of preference
   const priceFields = [
-    'pricePerUnit',
-    'pricePerDay', 
-    'unitPrice',
-    'price',
-    'cost',
-    'rate'
+    "pricePerUnit",
+    "pricePerDay",
+    "unitPrice",
+    "price",
+    "cost",
+    "rate",
   ];
-  
+
   for (const field of priceFields) {
-    if (item[field] !== undefined && item[field] !== null && item[field] !== '') {
+    if (
+      item[field] !== undefined &&
+      item[field] !== null &&
+      item[field] !== ""
+    ) {
       const price = safeParseFloat(item[field]);
       if (price > 0) {
         return price;
       }
     }
   }
-  
+
   // If no valid price found, return 0 and log warning
-  console.warn(`No valid price found for item: ${item.name || 'Unknown item'}`, item);
+  console.warn(
+    `No valid price found for item: ${item.name || "Unknown item"}`,
+    item,
+  );
   return 0;
 };
 
 // FIXED: Helper function to calculate order total with daily rates - HANDLES NaN VALUES
 const calculateOrderPricing = (order, dailyRate = 0) => {
   const { items, dateInfo, pricing: existingPricing } = order;
-  
+
   // If order already has valid pricing, use it and just add daily charges if needed
-  if (existingPricing && 
-      existingPricing.subtotal !== undefined && 
-      existingPricing.tax !== undefined && 
-      existingPricing.total !== undefined &&
-      !isNaN(existingPricing.subtotal) &&
-      !isNaN(existingPricing.tax) &&
-      !isNaN(existingPricing.total)) {
-    
-    console.log('Using existing pricing from database:', existingPricing);
-    
+  if (
+    existingPricing &&
+    existingPricing.subtotal !== undefined &&
+    existingPricing.tax !== undefined &&
+    existingPricing.total !== undefined &&
+    !isNaN(existingPricing.subtotal) &&
+    !isNaN(existingPricing.tax) &&
+    !isNaN(existingPricing.total)
+  ) {
+    console.log("Using existing pricing from database:", existingPricing);
+
     const { startDate, endDate } = dateInfo;
     const start = new Date(startDate);
     const end = new Date(endDate);
     const timeDiff = end.getTime() - start.getTime();
-    const durationInDays = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1);
-    
+    const durationInDays = Math.max(
+      1,
+      Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1,
+    );
+
     const safeDailyRate = safeParseFloat(dailyRate, 0);
     const dailyCharges = safeDailyRate * durationInDays;
-    
+
     // Use existing pricing but add daily charges if any
     const itemsSubtotal = safeParseFloat(existingPricing.subtotal, 0);
     const subtotal = itemsSubtotal + dailyCharges;
     const tax = subtotal * 0.075; // Recalculate tax on new subtotal
     const total = subtotal + tax;
-    
+
     const result = {
       itemsSubtotal,
       dailyCharges,
@@ -214,25 +229,25 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
         subtotal: formatCurrency(subtotal),
         tax: formatCurrency(tax),
         total: formatCurrency(total),
-      }
+      },
     };
-    
-    console.log('Using existing pricing with daily charges added:', result);
+
+    console.log("Using existing pricing with daily charges added:", result);
     return result;
   }
-  
+
   // If no existing pricing or invalid pricing, calculate from scratch
-  console.log('Calculating pricing from scratch for order:', {
+  console.log("Calculating pricing from scratch for order:", {
     startDate: dateInfo?.startDate,
     endDate: dateInfo?.endDate,
     itemsCount: items ? items.length : 0,
-    dailyRate
+    dailyRate,
   });
-  
+
   const { startDate, endDate } = dateInfo || {};
-  
+
   if (!startDate || !endDate) {
-    console.error('Missing date information in order');
+    console.error("Missing date information in order");
     return {
       itemsSubtotal: 0,
       dailyCharges: 0,
@@ -248,16 +263,19 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
         subtotal: formatCurrency(0),
         tax: formatCurrency(0),
         total: formatCurrency(0),
-      }
+      },
     };
   }
-  
+
   // Calculate rental duration safely
   const start = new Date(startDate);
   const end = new Date(endDate);
   const timeDiff = end.getTime() - start.getTime();
-  const durationInDays = Math.max(1, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1);
-  
+  const durationInDays = Math.max(
+    1,
+    Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1,
+  );
+
   // Calculate items subtotal with proper error handling
   let itemsSubtotal = 0;
   if (items && Array.isArray(items)) {
@@ -265,26 +283,28 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
       const itemPrice = getItemPrice(item);
       const quantity = safeParseFloat(item.quantity, 1);
       const itemTotal = itemPrice * quantity;
-      
-      console.log(`Item: ${item.name || 'Unknown'}, Price: ${itemPrice}, Qty: ${quantity}, Total: ${itemTotal}`);
-      
+
+      console.log(
+        `Item: ${item.name || "Unknown"}, Price: ${itemPrice}, Qty: ${quantity}, Total: ${itemTotal}`,
+      );
+
       return total + itemTotal;
     }, 0);
   }
-  
+
   // Calculate daily rate charges safely
   const safeDailyRate = safeParseFloat(dailyRate, 0);
   const dailyCharges = safeDailyRate * durationInDays;
-  
+
   // Calculate subtotal
   const subtotal = itemsSubtotal + dailyCharges;
-  
+
   // Calculate tax (7.5%)
   const tax = subtotal * 0.075;
-  
+
   // Calculate total
   const total = subtotal + tax;
-  
+
   const result = {
     itemsSubtotal,
     dailyCharges,
@@ -300,10 +320,10 @@ const calculateOrderPricing = (order, dailyRate = 0) => {
       subtotal: formatCurrency(subtotal),
       tax: formatCurrency(tax),
       total: formatCurrency(total),
-    }
+    },
   };
-  
-  console.log('Calculated pricing result:', result);
+
+  console.log("Calculated pricing result:", result);
   return result;
 };
 
@@ -324,10 +344,10 @@ const getOrders = async (req, res) => {
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const thisWeekOrders = orders.filter(
-      (o) => new Date(o.createdAt) >= oneWeekAgo
+      (o) => new Date(o.createdAt) >= oneWeekAgo,
     );
     const thisMonthOrders = orders.filter(
-      (o) => new Date(o.createdAt) >= oneMonthAgo
+      (o) => new Date(o.createdAt) >= oneMonthAgo,
     );
 
     const totalRevenue = orders
@@ -343,10 +363,10 @@ const getOrders = async (req, res) => {
       totalRevenue: totalRevenue,
     };
 
-    res.status(200).json({ 
-      data: orders, 
-      pagination, 
-      stats 
+    res.status(200).json({
+      data: orders,
+      pagination,
+      stats,
     });
   } catch (error) {
     console.error("Get orders error:", error);
@@ -372,7 +392,7 @@ const createOrder = async (req, res) => {
     // Generate unique order ID and order number
     const lastOrder = await Order.findOne().sort({ id: -1 });
     const nextId = lastOrder ? lastOrder.id + 1 : 41489;
-    
+
     req.body.id = nextId;
     req.body.orderNumber = `Order #${nextId}`;
 
@@ -385,22 +405,30 @@ const createOrder = async (req, res) => {
     // WEBSOCKET NOTIFICATION FOR NEW ORDER
     try {
       if (global.genericWebSocket) {
-        global.genericWebSocket.broadcast({
-          type: 'new_order',
-          module: 'orders',
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            customerName: order.customerInfo.name,
-            total: formatCurrency(safeParseFloat(order.pricing?.total, 0)),
-            items: order.items ? order.items.length : 0,
-            status: order.status,
-            timestamp: new Date().toISOString()
-          }
-        }, (client) => {
-          return client.type === 'admin' && client.subscribedModules.has('orders');
-        });
-        console.log("WebSocket notification sent for new order:", order.orderNumber);
+        global.genericWebSocket.broadcast(
+          {
+            type: "new_order",
+            module: "orders",
+            data: {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              customerName: order.customerInfo.name,
+              total: formatCurrency(safeParseFloat(order.pricing?.total, 0)),
+              items: order.items ? order.items.length : 0,
+              status: order.status,
+              timestamp: new Date().toISOString(),
+            },
+          },
+          (client) => {
+            return (
+              client.type === "admin" && client.subscribedModules.has("orders")
+            );
+          },
+        );
+        console.log(
+          "WebSocket notification sent for new order:",
+          order.orderNumber,
+        );
       }
     } catch (wsError) {
       console.error("Failed to send WebSocket notification:", wsError);
@@ -428,14 +456,14 @@ const searchOrders = async (req, res) => {
     }
 
     if (orderNumber) {
-      query.orderNumber = { $regex: orderNumber, $options: 'i' };
+      query.orderNumber = { $regex: orderNumber, $options: "i" };
     }
 
     const orders = await Order.find(query).sort({ createdAt: -1 });
     res.status(200).json(orders);
   } catch (error) {
-    console.error('Search orders error:', error);
-    res.status(500).json({ message: 'Server error while searching orders' });
+    console.error("Search orders error:", error);
+    res.status(500).json({ message: "Server error while searching orders" });
   }
 };
 
@@ -459,37 +487,52 @@ const getOrderById = async (req, res) => {
 // Update order
 const updateOrder = async (req, res) => {
   try {
-    const updatedOrder = await Order.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-    if (!updatedOrder) return res.status(404).json({ message: 'Order not found' });
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+    if (!updatedOrder)
+      return res.status(404).json({ message: "Order not found" });
 
     // WEBSOCKET NOTIFICATION FOR ORDER UPDATE
     try {
       if (global.genericWebSocket) {
-        global.genericWebSocket.broadcast({
-          type: 'order_updated',
-          module: 'orders',
-          data: {
-            orderId: updatedOrder._id,
-            orderNumber: updatedOrder.orderNumber,
-            customerName: updatedOrder.customerInfo.name,
-            timestamp: new Date().toISOString()
-          }
-        }, (client) => {
-          return client.type === 'admin' && client.subscribedModules.has('orders');
-        });
-        console.log("WebSocket notification sent for order update:", updatedOrder.orderNumber);
+        global.genericWebSocket.broadcast(
+          {
+            type: "order_updated",
+            module: "orders",
+            data: {
+              orderId: updatedOrder._id,
+              orderNumber: updatedOrder.orderNumber,
+              customerName: updatedOrder.customerInfo.name,
+              timestamp: new Date().toISOString(),
+            },
+          },
+          (client) => {
+            return (
+              client.type === "admin" && client.subscribedModules.has("orders")
+            );
+          },
+        );
+        console.log(
+          "WebSocket notification sent for order update:",
+          updatedOrder.orderNumber,
+        );
       }
     } catch (wsError) {
       console.error("Failed to send WebSocket notification:", wsError);
     }
 
-    res.status(200).json({ message: 'Order updated successfully', order: updatedOrder });
+    res
+      .status(200)
+      .json({ message: "Order updated successfully", order: updatedOrder });
   } catch (error) {
-    console.error('Update order error:', error);
-    res.status(500).json({ message: 'Server error while updating order' });
+    console.error("Update order error:", error);
+    res.status(500).json({ message: "Server error while updating order" });
   }
 };
 
@@ -498,7 +541,15 @@ const updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!["pending", "confirmed", "in_progress", "completed", "cancelled"].includes(status)) {
+    if (
+      ![
+        "pending",
+        "confirmed",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ].includes(status)
+    ) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
@@ -511,26 +562,36 @@ const updateOrderStatus = async (req, res) => {
     order.status = status;
     await order.save();
 
-    console.log(`Order ${order.orderNumber} status updated from ${oldStatus} to ${status}`);
+    console.log(
+      `Order ${order.orderNumber} status updated from ${oldStatus} to ${status}`,
+    );
 
     // WEBSOCKET NOTIFICATION FOR STATUS UPDATE
     try {
       if (global.genericWebSocket) {
-        global.genericWebSocket.broadcast({
-          type: 'order_status_updated',
-          module: 'orders',
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            customerName: order.customerInfo.name,
-            oldStatus,
-            newStatus: status,
-            timestamp: new Date().toISOString()
-          }
-        }, (client) => {
-          return client.type === 'admin' && client.subscribedModules.has('orders');
-        });
-        console.log("WebSocket notification sent for status update:", order.orderNumber);
+        global.genericWebSocket.broadcast(
+          {
+            type: "order_status_updated",
+            module: "orders",
+            data: {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              customerName: order.customerInfo.name,
+              oldStatus,
+              newStatus: status,
+              timestamp: new Date().toISOString(),
+            },
+          },
+          (client) => {
+            return (
+              client.type === "admin" && client.subscribedModules.has("orders")
+            );
+          },
+        );
+        console.log(
+          "WebSocket notification sent for status update:",
+          order.orderNumber,
+        );
       }
     } catch (wsError) {
       console.error("Failed to send WebSocket notification:", wsError);
@@ -569,19 +630,27 @@ const deleteOrder = async (req, res) => {
     // WEBSOCKET NOTIFICATION FOR ORDER DELETION
     try {
       if (global.genericWebSocket) {
-        global.genericWebSocket.broadcast({
-          type: 'order_deleted',
-          module: 'orders',
-          data: {
-            orderId: orderInfo.orderId,
-            orderNumber: orderInfo.orderNumber,
-            customerName: orderInfo.customerName,
-            timestamp: new Date().toISOString()
-          }
-        }, (client) => {
-          return client.type === 'admin' && client.subscribedModules.has('orders');
-        });
-        console.log("WebSocket notification sent for order deletion:", orderInfo.orderNumber);
+        global.genericWebSocket.broadcast(
+          {
+            type: "order_deleted",
+            module: "orders",
+            data: {
+              orderId: orderInfo.orderId,
+              orderNumber: orderInfo.orderNumber,
+              customerName: orderInfo.customerName,
+              timestamp: new Date().toISOString(),
+            },
+          },
+          (client) => {
+            return (
+              client.type === "admin" && client.subscribedModules.has("orders")
+            );
+          },
+        );
+        console.log(
+          "WebSocket notification sent for order deletion:",
+          orderInfo.orderNumber,
+        );
       }
     } catch (wsError) {
       console.error("Failed to send WebSocket notification:", wsError);
@@ -622,23 +691,30 @@ const sendOrderInvoice = async (req, res) => {
     console.log("Order data for invoice:", JSON.stringify(order, null, 2));
 
     // Calculate pricing with daily rates - this now handles NaN properly
-    const pricingDetails = calculateOrderPricing(order, parseFloat(dailyRate) || 0);
-    
+    const pricingDetails = calculateOrderPricing(
+      order,
+      parseFloat(dailyRate) || 0,
+    );
+
     // Double-check that we don't have any NaN values
-    if (isNaN(pricingDetails.total) || isNaN(pricingDetails.subtotal) || isNaN(pricingDetails.tax)) {
+    if (
+      isNaN(pricingDetails.total) ||
+      isNaN(pricingDetails.subtotal) ||
+      isNaN(pricingDetails.tax)
+    ) {
       console.error("NaN detected in pricing calculations:", pricingDetails);
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Error calculating invoice totals. Please check order data.",
-        details: pricingDetails
+        details: pricingDetails,
       });
     }
 
     // Generate invoice data
     const invoiceData = {
-      invoiceNumber: `INV-${order.orderNumber.replace('Order #', '')}`,
+      invoiceNumber: `INV-${order.orderNumber.replace("Order #", "")}`,
       issueDate: new Date().toISOString(),
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-      
+
       // Company details
       company: {
         name: "iBloom Rentals",
@@ -652,8 +728,8 @@ const sendOrderInvoice = async (req, res) => {
           bankName: "First Bank of Nigeria",
           accountName: "iBloom Rentals Limited",
           accountNumber: "3123456789",
-          sortCode: "011151003"
-        }
+          sortCode: "011151003",
+        },
       },
 
       // Customer details
@@ -661,7 +737,7 @@ const sendOrderInvoice = async (req, res) => {
         name: order.customerInfo.name,
         email: order.customerInfo.email,
         phone: order.customerInfo.phone,
-        address: order.deliveryInfo.address
+        address: order.deliveryInfo.address,
       },
 
       // Order details
@@ -672,24 +748,26 @@ const sendOrderInvoice = async (req, res) => {
         endDate: order.dateInfo.endDate,
         duration: pricingDetails.durationInDays,
         deliveryType: order.deliveryInfo.type,
-        notes: order.notes
+        notes: order.notes,
       },
 
       // Items - FIXED to handle different price field names
-      items: order.items ? order.items.map(item => {
-        const itemPrice = getItemPrice(item);
-        const quantity = safeParseFloat(item.quantity, 1);
-        const itemTotal = itemPrice * quantity;
-        
-        return {
-          name: item.name,
-          category: item.category,
-          quantity: quantity,
-          pricePerDay: itemPrice,
-          totalPrice: itemTotal,
-          description: `${quantity} x ${formatCurrency(itemPrice)} per unit`
-        };
-      }) : [],
+      items: order.items
+        ? order.items.map((item) => {
+            const itemPrice = getItemPrice(item);
+            const quantity = safeParseFloat(item.quantity, 1);
+            const itemTotal = itemPrice * quantity;
+
+            return {
+              name: item.name,
+              category: item.category,
+              quantity: quantity,
+              pricePerDay: itemPrice,
+              totalPrice: itemTotal,
+              description: `${quantity} x ${formatCurrency(itemPrice)} per unit`,
+            };
+          })
+        : [],
 
       // Pricing
       ...pricingDetails,
@@ -698,27 +776,36 @@ const sendOrderInvoice = async (req, res) => {
       additionalServices: [
         {
           name: "Delivery Service",
-          included: order.deliveryInfo.type === 'delivery',
-          required: false
+          included: order.deliveryInfo.type === "delivery",
+          required: false,
         },
         {
           name: "Professional Setup",
           included: false,
-          required: false
-        }
+          required: false,
+        },
       ],
 
       requiresDeposit: pricingDetails.total > 50000,
-      depositAmount: pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
+      depositAmount:
+        pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
     };
 
-    console.log("Generated invoice data:", JSON.stringify(invoiceData, null, 2));
+    console.log(
+      "Generated invoice data:",
+      JSON.stringify(invoiceData, null, 2),
+    );
 
     // Generate PDF buffer
     const pdfBuffer = await generateOrderInvoicePDF(invoiceData);
 
     // Send email with PDF attachment
-    await sendOrderInvoiceEmail(customerEmail, customerName, invoiceData, pdfBuffer);
+    await sendOrderInvoiceEmail(
+      customerEmail,
+      customerName,
+      invoiceData,
+      pdfBuffer,
+    );
 
     // Update order with invoice info
     order.invoiceGenerated = true;
@@ -731,7 +818,7 @@ const sendOrderInvoice = async (req, res) => {
       message: "Order invoice sent successfully",
       sentTo: customerEmail,
       invoiceNumber: invoiceData.invoiceNumber,
-      pricingDetails
+      pricingDetails,
     });
   } catch (error) {
     console.error("Failed to send order invoice:", error);
@@ -790,12 +877,12 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
     .text(
       `Issue Date: ${new Date(invoiceData.issueDate).toLocaleDateString()}`,
       pageWidth - 220,
-      headerY + 12
+      headerY + 12,
     )
     .text(
       `Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}`,
       pageWidth - 220,
-      headerY + 24
+      headerY + 24,
     );
 
   // Add logo
@@ -846,7 +933,7 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
     .text(
       `${invoiceData.company.city}, ${invoiceData.company.state}`,
       margin,
-      currentY + 42
+      currentY + 42,
     )
     .text(invoiceData.company.country, margin, currentY + 54)
     .text(invoiceData.company.phone, margin, currentY + 66)
@@ -895,12 +982,28 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
     .text(
       `Rental Period: ${invoiceData.order.duration} days`,
       orderCol2,
-      orderY
+      orderY,
     )
-    .text(`Start: ${new Date(invoiceData.order.startDate).toLocaleDateString()}`, orderCol1, orderY + 12)
-    .text(`End: ${new Date(invoiceData.order.endDate).toLocaleDateString()}`, orderCol2, orderY + 12)
-    .text(`Delivery: ${invoiceData.order.deliveryType.replace('_', ' ').toUpperCase()}`, orderCol1, orderY + 24)
-    .text(`Daily Rate: ${invoiceData.formatted.dailyRate}`, orderCol2, orderY + 24);
+    .text(
+      `Start: ${new Date(invoiceData.order.startDate).toLocaleDateString()}`,
+      orderCol1,
+      orderY + 12,
+    )
+    .text(
+      `End: ${new Date(invoiceData.order.endDate).toLocaleDateString()}`,
+      orderCol2,
+      orderY + 12,
+    )
+    .text(
+      `Delivery: ${invoiceData.order.deliveryType.replace("_", " ").toUpperCase()}`,
+      orderCol1,
+      orderY + 24,
+    )
+    .text(
+      `Daily Rate: ${invoiceData.formatted.dailyRate}`,
+      orderCol2,
+      orderY + 24,
+    );
 
   currentY += 85;
 
@@ -921,12 +1024,9 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
         .font("Helvetica-Bold")
         .text(`${item.name} (Qty: ${item.quantity})`, margin, currentY)
         .font("Helvetica")
-        .text(
-          formatCurrency(item.totalPrice),
-          pageWidth - 120,
-          currentY,
-          { align: "right" }
-        );
+        .text(formatCurrency(item.totalPrice), pageWidth - 120, currentY, {
+          align: "right",
+        });
 
       if (item.description) {
         currentY += 12;
@@ -958,13 +1058,21 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
     .fillColor(darkColor)
     .font("Helvetica")
     .text("Items Subtotal:", totalsX, totalsY)
-    .text(invoiceData.formatted.itemsSubtotal, totalsX + 130, totalsY, { align: "right" })
+    .text(invoiceData.formatted.itemsSubtotal, totalsX + 130, totalsY, {
+      align: "right",
+    })
     .text("Daily Charges:", totalsX, totalsY + 15)
-    .text(invoiceData.formatted.dailyCharges, totalsX + 130, totalsY + 15, { align: "right" })
+    .text(invoiceData.formatted.dailyCharges, totalsX + 130, totalsY + 15, {
+      align: "right",
+    })
     .text("Subtotal:", totalsX, totalsY + 30)
-    .text(invoiceData.formatted.subtotal, totalsX + 130, totalsY + 30, { align: "right" })
+    .text(invoiceData.formatted.subtotal, totalsX + 130, totalsY + 30, {
+      align: "right",
+    })
     .text("Tax (7.5%):", totalsX, totalsY + 45)
-    .text(invoiceData.formatted.tax, totalsX + 130, totalsY + 45, { align: "right" });
+    .text(invoiceData.formatted.tax, totalsX + 130, totalsY + 45, {
+      align: "right",
+    });
 
   // Total line
   doc
@@ -979,7 +1087,9 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
     .font("Helvetica-Bold")
     .fillColor(darkColor)
     .text("Total:", totalsX, totalsY + 65)
-    .text(invoiceData.formatted.total, totalsX + 130, totalsY + 65, { align: "right" });
+    .text(invoiceData.formatted.total, totalsX + 130, totalsY + 65, {
+      align: "right",
+    });
 
   // Deposit info if required
   if (invoiceData.requiresDeposit) {
@@ -992,7 +1102,7 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
         formatCurrency(invoiceData.depositAmount),
         totalsX + 130,
         totalsY + 85,
-        { align: "right" }
+        { align: "right" },
       );
   }
 
@@ -1018,17 +1128,17 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
       .text(
         `Bank: ${invoiceData.company.bankDetails.bankName}`,
         margin + 10,
-        bankY + 22
+        bankY + 22,
       )
       .text(
         `Account: ${invoiceData.company.bankDetails.accountName}`,
         margin + 10,
-        bankY + 34
+        bankY + 34,
       )
       .text(
         `Number: ${invoiceData.company.bankDetails.accountNumber}`,
         margin + 10,
-        bankY + 46
+        bankY + 46,
       )
       .text(`Reference: ${invoiceData.invoiceNumber}`, margin + 10, bankY + 58);
 
@@ -1036,7 +1146,7 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
       doc.text(
         `Sort Code: ${invoiceData.company.bankDetails.sortCode}`,
         margin + 10,
-        bankY + 70
+        bankY + 70,
       );
     }
   }
@@ -1061,12 +1171,17 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
       `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
       margin,
       currentY + 15,
-      { align: "center", width: pageWidth - 2 * margin }
+      { align: "center", width: pageWidth - 2 * margin },
     );
 };
 
 // Send order invoice email
-const sendOrderInvoiceEmail = async (customerEmail, customerName, invoiceData, pdfBuffer) => {
+const sendOrderInvoiceEmail = async (
+  customerEmail,
+  customerName,
+  invoiceData,
+  pdfBuffer,
+) => {
   const logoBase64 = await getLogoBase64();
 
   const mailOptions = {
@@ -1098,26 +1213,37 @@ const sendOrderInvoiceEmail = async (customerEmail, customerName, invoiceData, p
 };
 
 // FIXED: Generate HTML content for order invoice email - HANDLES NaN VALUES
-const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
+const generateOrderInvoiceEmailHTML = (
+  customerName,
+  invoiceData,
+  logoBase64,
+) => {
   const logoImg = logoBase64
     ? `<img src="cid:companylogo" alt="Company Logo" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">`
     : `<div style="width: 80px; height: 80px; background: #E5E7EB; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #9CA3AF; font-weight: bold; font-size: 12px;">LOGO</div>`;
 
-  const itemsHTML = invoiceData.items && invoiceData.items.length > 0
-    ? invoiceData.items
-        .map((item) => `
+  const itemsHTML =
+    invoiceData.items && invoiceData.items.length > 0
+      ? invoiceData.items
+          .map(
+            (item) => `
           <tr style="border-bottom: 1px solid #E5E7EB;">
-            <td style="padding: 8px 0; font-weight: bold;">${item.name || 'Unknown Item'}</td>
+            <td style="padding: 8px 0; font-weight: bold;">${item.name || "Unknown Item"}</td>
             <td style="padding: 8px 0; text-align: center;">${safeParseFloat(item.quantity, 1)}</td>
             <td style="padding: 8px 0; text-align: right;">${formatCurrency(safeParseFloat(item.totalPrice, 0))}</td>
           </tr>
-        `)
-        .join("")
-    : `<tr><td colspan="3" style="padding: 8px 0; text-align: center; color: #6B7280;">No items found</td></tr>`;
+        `,
+          )
+          .join("")
+      : `<tr><td colspan="3" style="padding: 8px 0; text-align: center; color: #6B7280;">No items found</td></tr>`;
 
   // Ensure all values are properly formatted and not NaN
-  const safeItemsSubtotal = formatCurrency(safeParseFloat(invoiceData.itemsSubtotal, 0));
-  const safeDailyCharges = formatCurrency(safeParseFloat(invoiceData.dailyCharges, 0));
+  const safeItemsSubtotal = formatCurrency(
+    safeParseFloat(invoiceData.itemsSubtotal, 0),
+  );
+  const safeDailyCharges = formatCurrency(
+    safeParseFloat(invoiceData.dailyCharges, 0),
+  );
   const safeTax = formatCurrency(safeParseFloat(invoiceData.tax, 0));
   const safeTotal = formatCurrency(safeParseFloat(invoiceData.total, 0));
   const safeDuration = safeParseFloat(invoiceData.order?.duration, 1);
@@ -1142,7 +1268,7 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
 
       <!-- Greeting -->
       <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-        <h2 style="color: #1F2937; margin-top: 0;">Hello ${customerName || 'Valued Customer'}!</h2>
+        <h2 style="color: #1F2937; margin-top: 0;">Hello ${customerName || "Valued Customer"}!</h2>
         <p style="margin: 0;">Thank you for your order! Please find your invoice attached for your rental order.</p>
       </div>
 
@@ -1156,7 +1282,7 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Order Number:</td>
-            <td style="padding: 12px 0;">${invoiceData.order?.orderNumber || 'N/A'}</td>
+            <td style="padding: 12px 0;">${invoiceData.order?.orderNumber || "N/A"}</td>
           </tr>
           <tr style="border-bottom: 1px solid #E5E7EB;">
             <td style="padding: 12px 0; font-weight: bold; color: #6B7280;">Rental Period:</td>
@@ -1182,7 +1308,9 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
       </div>
 
       <!-- Items List -->
-      ${invoiceData.items && invoiceData.items.length > 0 ? `
+      ${
+        invoiceData.items && invoiceData.items.length > 0
+          ? `
       <div style="background: white; border: 2px solid #E5E7EB; border-radius: 10px; padding: 25px; margin-bottom: 25px;">
         <h3 style="color: #4F46E5; margin-top: 0;">Rental Items</h3>
         <table style="width: 100%; border-collapse: collapse;">
@@ -1198,7 +1326,9 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
           </tbody>
         </table>
       </div>
-      ` : ""}
+      `
+          : ""
+      }
 
       <!-- Payment Instructions -->
       <div style="background: #EFF6FF; border: 2px solid #DBEAFE; border-radius: 10px; padding: 25px; margin-bottom: 25px;">
@@ -1210,7 +1340,9 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
             <li style="margin-bottom: 8px;">Cash payment (upon delivery)</li>
             <li style="margin-bottom: 8px;">Mobile money transfers</li>
           </ul>
-          ${invoiceData.company.bankDetails ? `
+          ${
+            invoiceData.company.bankDetails
+              ? `
           <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #3B82F6;">
             <p style="margin: 0; font-weight: bold; color: #1E40AF;">Bank Details:</p>
             <p style="margin: 5px 0 0 0; font-size: 14px;">
@@ -1221,14 +1353,16 @@ const generateOrderInvoiceEmailHTML = (customerName, invoiceData, logoBase64) =>
               Reference: ${invoiceData.invoiceNumber}
             </p>
           </div>
-          ` : ""}
+          `
+              : ""
+          }
         </div>
       </div>
 
       <!-- Footer -->
       <div style="text-align: center; padding: 20px; background: #F8FAFC; border-radius: 8px; border-top: 3px solid #4F46E5;">
         <p style="margin: 0; color: #6B7280; font-size: 16px; font-weight: bold;">
-          Thank you for choosing ${invoiceData.company?.name || 'iBloom Rentals'}!
+          Thank you for choosing ${invoiceData.company?.name || "iBloom Rentals"}!
         </p>
         <p style="margin: 10px 0 0 0; color: #9CA3AF; font-size: 12px;">
           This email was sent automatically. Please save this email and the attached invoice for your records.
@@ -1259,23 +1393,33 @@ const downloadOrderInvoice = async (req, res) => {
     console.log("Order data for download:", JSON.stringify(order, null, 2));
 
     // Calculate pricing with daily rates - this now handles NaN properly
-    const pricingDetails = calculateOrderPricing(order, parseFloat(dailyRate) || 0);
-    
+    const pricingDetails = calculateOrderPricing(
+      order,
+      parseFloat(dailyRate) || 0,
+    );
+
     // Double-check that we don't have any NaN values
-    if (isNaN(pricingDetails.total) || isNaN(pricingDetails.subtotal) || isNaN(pricingDetails.tax)) {
-      console.error("NaN detected in pricing calculations for download:", pricingDetails);
-      return res.status(400).json({ 
+    if (
+      isNaN(pricingDetails.total) ||
+      isNaN(pricingDetails.subtotal) ||
+      isNaN(pricingDetails.tax)
+    ) {
+      console.error(
+        "NaN detected in pricing calculations for download:",
+        pricingDetails,
+      );
+      return res.status(400).json({
         message: "Error calculating invoice totals. Please check order data.",
-        details: pricingDetails
+        details: pricingDetails,
       });
     }
 
     // Generate invoice data (same structure as sendOrderInvoice)
     const invoiceData = {
-      invoiceNumber: `INV-${order.orderNumber.replace('Order #', '')}`,
+      invoiceNumber: `INV-${order.orderNumber.replace("Order #", "")}`,
       issueDate: new Date().toISOString(),
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      
+
       company: {
         name: "iBloom Rentals",
         address: "123 Business Street",
@@ -1288,15 +1432,15 @@ const downloadOrderInvoice = async (req, res) => {
           bankName: "First Bank of Nigeria",
           accountName: "iBloom Rentals Limited",
           accountNumber: "3123456789",
-          sortCode: "011151003"
-        }
+          sortCode: "011151003",
+        },
       },
 
       customer: {
         name: order.customerInfo.name,
         email: order.customerInfo.email,
         phone: order.customerInfo.phone,
-        address: order.deliveryInfo.address
+        address: order.deliveryInfo.address,
       },
 
       order: {
@@ -1306,44 +1450,52 @@ const downloadOrderInvoice = async (req, res) => {
         endDate: order.dateInfo.endDate,
         duration: pricingDetails.durationInDays,
         deliveryType: order.deliveryInfo.type,
-        notes: order.notes
+        notes: order.notes,
       },
 
       // Items - FIXED to handle different price field names
-      items: order.items ? order.items.map(item => {
-        const itemPrice = getItemPrice(item);
-        const quantity = safeParseFloat(item.quantity, 1);
-        const itemTotal = itemPrice * quantity;
-        
-        return {
-          name: item.name,
-          category: item.category,
-          quantity: quantity,
-          pricePerDay: itemPrice,
-          totalPrice: itemTotal,
-          description: `${quantity} x ${formatCurrency(itemPrice)} per unit`
-        };
-      }) : [],
+      items: order.items
+        ? order.items.map((item) => {
+            const itemPrice = getItemPrice(item);
+            const quantity = safeParseFloat(item.quantity, 1);
+            const itemTotal = itemPrice * quantity;
+
+            return {
+              name: item.name,
+              category: item.category,
+              quantity: quantity,
+              pricePerDay: itemPrice,
+              totalPrice: itemTotal,
+              description: `${quantity} x ${formatCurrency(itemPrice)} per unit`,
+            };
+          })
+        : [],
 
       ...pricingDetails,
 
       requiresDeposit: pricingDetails.total > 50000,
-      depositAmount: pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
+      depositAmount:
+        pricingDetails.total > 50000 ? pricingDetails.total * 0.5 : 0,
     };
 
-    console.log("Generated invoice data for download:", JSON.stringify(invoiceData, null, 2));
+    console.log(
+      "Generated invoice data for download:",
+      JSON.stringify(invoiceData, null, 2),
+    );
 
     // Generate PDF buffer
     const pdfBuffer = await generateOrderInvoicePDF(invoiceData);
 
     // Set response headers for PDF download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoiceData.invoiceNumber}.pdf"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="Invoice-${invoiceData.invoiceNumber}.pdf"`,
+    );
+    res.setHeader("Content-Length", pdfBuffer.length);
 
     // Send PDF buffer
     res.send(pdfBuffer);
-
   } catch (error) {
     console.error("Failed to download order invoice:", error);
     res.status(500).json({
@@ -1362,5 +1514,5 @@ module.exports = {
   searchOrders,
   updateOrderStatus,
   sendOrderInvoice,
-  downloadOrderInvoice
+  downloadOrderInvoice,
 };
