@@ -141,6 +141,7 @@ const { shareItem } = require("./controllers/serviceController");
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes); // Now includes subcategory endpoints
 app.get("/share/:categoryId/:itemId", shareItem); // New route for sharing items
+app.get("/share/:categoryId/sub/:subId/:itemId", shareItem); // items inside a subcategory (their ids repeat across subcategories)
 app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/bookings", bookingRoutes);

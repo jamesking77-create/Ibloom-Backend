@@ -150,15 +150,44 @@ const getCategoryById = async (req, res) => {
   }
 };
 
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+// Share page for one item: Open Graph tags for the WhatsApp/social preview, then
+// a redirect into the site with the item open.
+//   /share/:categoryId/:itemId               top-level item (and old links)
+//   /share/:categoryId/sub/:subId/:itemId    item inside a subcategory
+// Subcategory items are numbered 1, 2, 3… within each subcategory, so their ids
+// repeat across subcategories; without the subId the lookup can return the
+// wrong item.
 const shareItem = async (req, res) => {
   try {
-    const { categoryId, itemId } = req.params;
+    const { categoryId, subId, itemId } = req.params;
     const numericCategoryId = parseInt(categoryId, 10);
+    const numericSubId = subId !== undefined ? parseInt(subId, 10) : null;
+    const numericItemId = parseInt(itemId, 10);
+
+    if (Number.isNaN(numericCategoryId) || Number.isNaN(numericItemId) || Number.isNaN(numericSubId)) {
+      return res.status(404).send("Item not found");
+    }
 
     const category = await Category.findOne({ id: numericCategoryId });
     if (!category) return res.status(404).send("Item not found");
 
-    const item = findItemAnywhere(category, itemId);
+    let item;
+    if (numericSubId !== null) {
+      const sub = (category.subCategories || []).find(
+        (s) => parseInt(s.id, 10) === numericSubId
+      );
+      item = sub?.items?.find((i) => parseInt(i.id, 10) === numericItemId);
+    } else {
+      item = findItemAnywhere(category, itemId);
+    }
     if (!item) return res.status(404).send("Item not found");
 
     const image =
@@ -167,12 +196,15 @@ const shareItem = async (req, res) => {
       "https://ibloomrentals.com/default-og.jpg";
 
     const price = item.price ? `₦${item.price}` : "";
-    const description = (item.description || "").slice(0, 160).replace(/"/g, "&quot;");
-    const safeName = item.name.replace(/"/g, "&quot;");
+    const description = escapeHtml((item.description || "").slice(0, 160));
+    const safeName = escapeHtml(item.name);
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://ibloomrentals.com";
 
-const redirectUrl = `${FRONTEND_URL}/category/${numericCategoryId}?item=${item.id}`;
+    const subPath = numericSubId !== null ? `/sub/${numericSubId}` : "";
+    const subQuery = numericSubId !== null ? `sub=${numericSubId}&` : "";
+    const redirectUrl = `${FRONTEND_URL}/category/${numericCategoryId}?${subQuery}item=${numericItemId}`;
+    const shareUrl = `https://ibloomrentals.com/share/${numericCategoryId}${subPath}/${numericItemId}`;
 
     res.send(`
       <!DOCTYPE html>
@@ -182,9 +214,9 @@ const redirectUrl = `${FRONTEND_URL}/category/${numericCategoryId}?item=${item.i
           <title>${safeName}</title>
           <meta property="og:title" content="${safeName}" />
           <meta property="og:description" content="${description} - ${price}" />
-          <meta property="og:image" content="${image}" />
+          <meta property="og:image" content="${escapeHtml(image)}" />
           <meta property="og:type" content="product" />
-          <meta property="og:url" content="https://ibloomrentals.com/share/${numericCategoryId}/${item.id}" />
+          <meta property="og:url" content="${shareUrl}" />
           <meta name="twitter:card" content="summary_large_image" />
           <meta http-equiv="refresh" content="0; url=${redirectUrl}" />
           <script>window.location.replace("${redirectUrl}");</script>
