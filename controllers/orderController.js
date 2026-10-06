@@ -1091,21 +1091,6 @@ const generateOrderPDFContent = async (doc, invoiceData) => {
       align: "right",
     });
 
-  // Deposit info if required
-  if (invoiceData.requiresDeposit) {
-    doc
-      .fontSize(9)
-      .fillColor("#EA580C")
-      .font("Helvetica-Bold")
-      .text("Deposit Required (50%):", totalsX, totalsY + 85)
-      .text(
-        formatCurrency(invoiceData.depositAmount),
-        totalsX + 130,
-        totalsY + 85,
-        { align: "right" },
-      );
-  }
-
   // Bank Details Section
   if (invoiceData.company.bankDetails) {
     const bankY = totalsY;
