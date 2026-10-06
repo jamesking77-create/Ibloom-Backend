@@ -1065,23 +1065,6 @@ const generatePDFContent = async (doc, invoiceData) => {
       { align: "right" },
     );
 
-  // Deposit info if required
-  if (invoiceData.requiresDeposit) {
-    doc
-      .fontSize(9) // Reduced from 11
-      .fillColor("#EA580C")
-      .font("Helvetica-Bold")
-      .text("Deposit Required (50%):", totalsX, totalsY + 55)
-      .text(
-        `₦${(invoiceData.depositAmount || 0).toLocaleString("en-NG", {
-          minimumFractionDigits: 2,
-        })}`,
-        totalsX + 130,
-        totalsY + 55,
-        { align: "right" },
-      );
-  }
-
   // Bank Details Section - positioned on left side, more compact
   if (
     invoiceData.company.bankDetails &&
@@ -1312,18 +1295,6 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
               invoiceData.total || 0
             ).toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
           </tr>
-          ${
-            invoiceData.requiresDeposit
-              ? `
-          <tr style="background: #FEF3C7;">
-            <td style="padding: 12px 0; font-weight: bold; color: #92400E;">Deposit Required:</td>
-            <td style="padding: 12px 0; font-weight: bold; color: #D97706;">₦${(
-              invoiceData.depositAmount || 0
-            ).toLocaleString("en-NG", { minimumFractionDigits: 2 })}</td>
-          </tr>
-          `
-              : ""
-          }
         </table>
       </div>
 
@@ -1388,11 +1359,6 @@ const generateInvoiceEmailHTML = (customerName, invoiceData, logoBase64) => {
             invoiceData.dueDate,
           ).toLocaleDateString()}</strong></li>
           <li style="margin-bottom: 8px;">Late payments may incur additional fees</li>
-          ${
-            invoiceData.requiresDeposit
-              ? '<li style="margin-bottom: 8px;">A deposit is required to secure your booking</li>'
-              : ""
-          }
           <li style="margin-bottom: 8px;">Please quote the invoice number when making payment</li>
           <li style="margin-bottom: 8px;">Contact us immediately if you have any questions</li>
           <li style="margin-bottom: 8px;"><strong>Delivery and setup prices will be added and negotiated separately if selected.</strong></li>
